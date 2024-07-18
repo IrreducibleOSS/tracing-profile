@@ -3,7 +3,8 @@ mod log_tree;
 mod span_metadata;
 mod storage_utils;
 
-pub use field_visitor::FieldVisitor;
+#[allow(unused_imports)]
+pub use field_visitor::{StoringFieldVisitor, WritingFieldVisitor};
 pub use log_tree::LogTree;
 pub use span_metadata::*;
 #[cfg(feature = "perf_counters")]

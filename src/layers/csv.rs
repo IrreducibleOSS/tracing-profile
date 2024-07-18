@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::{collections::BTreeMap, time::Instant};
 use tracing::span;
 
-use crate::data::{self, with_span_storage_mut, FieldVisitor};
+use crate::data::{self, with_span_storage_mut, StoringFieldVisitor};
 use crate::err_msg;
 
 /// CsvLayer (internally called layer::csv)  
@@ -118,7 +118,7 @@ where
         ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
         with_span_storage_mut(id, ctx, |storage: &mut CsvMetadata| {
-            let mut visitor = FieldVisitor(&mut storage.fields);
+            let mut visitor = StoringFieldVisitor(&mut storage.fields);
             values.record(&mut visitor);
         });
     }
@@ -196,7 +196,7 @@ where
         });
 
         // warning: the library user must use #[instrument(skip_all)] or else too much data will be logged
-        let mut visitor = FieldVisitor(&mut storage.fields);
+        let mut visitor = StoringFieldVisitor(&mut storage.fields);
         attrs.record(&mut visitor);
 
         let mut extensions = span.extensions_mut();

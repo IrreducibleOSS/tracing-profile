@@ -51,6 +51,8 @@ root span [ 112.67µs | 100.00% ]
 
 The `PrintPerfCountersLayer` at the construction receives a vector of events (`perf_event::events::Event`) and their names. During execution for each span the number of the given events of each type is summed. The results are printed to the standard output in a form of a table.
 
+`perf_counters` crate feature enables this functionality.
+
 
 ```
 $ cargo test -- --nocapture
@@ -70,6 +72,12 @@ root span:
     instructions: 661552
     cycles: 738894
 ```
+
+### IttApiLayer
+
+The `IttApiLayer` adds one `ittapi::Task` for each span at runtime allowing observing spans in Intel VTune profiler. See [ITT API documentation](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html) for reference.
+
+`ittapi` crate feature enables this functionality.
 
 ### Example Test
 

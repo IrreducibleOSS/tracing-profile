@@ -1,4 +1,5 @@
 .vscode
+.cargo
 .idea/
 target/
 Cargo.lock

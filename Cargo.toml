@@ -9,6 +9,7 @@ readme = "README.md"
 repository = "https://gitlab.com/IrreducibleOSS/tracing-profile"
 
 [dependencies]
+ittapi = { version = "0.4.0", optional = true}
 perf-event = { version = "0.4.8", optional = true }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
@@ -16,3 +17,4 @@ tracing-subscriber = "0.3.16"
 [features]
 panic = []
 perf_counters = ["perf-event"]
+ittapi = ["dep:ittapi"]

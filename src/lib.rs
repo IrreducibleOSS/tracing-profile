@@ -9,11 +9,14 @@
 //!     `CsvLayer`: logs data in CSV format
 //!     `PrintTreeLayer`: prints a call graph
 //!     `PrintPerfCountersLayer`: prints aggregated performance counters for each span.
+//!     `IttApiLayer`: logs data in Intel's [ITT API](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html)
 //!
 //! ```
 //! use tracing::instrument;
 //! use tracing::debug_span;
+//! use tracing_subscriber::layer::SubscriberExt;
 //! use tracing_subscriber::prelude::*;
+//! use tracing_subscriber::registry::LookupSpan;
 //! use tracing_profile::*;
 //!
 //! #[instrument(skip_all, name= "graph_root", fields(a="b", c="d"))]
@@ -29,20 +32,52 @@
 //!     let layer = tracing_subscriber::registry()
 //!         .with(PrintTreeLayer::default())
 //!         .with(CsvLayer::new("/tmp/output.csv"));
-//!
+//!     let layer = with_perf_counters(layer);
+//!     let layer = with_ittapi(layer);
 //!     
-//!     #[cfg(feature = "perf_counters")]
-//!     {
-//!        use perf_event::events::Hardware;
-//!        layer.with(PrintPerfCountersLayer::new(
-//!            vec![("instructions".to_string(), Hardware::INSTRUCTIONS.into())]
-//!        ).unwrap()).init();
-//!     }
-//!     #[cfg(not(feature = "perf_counters"))]
-//!     {
-//!        layer.init();
-//!     }
 //!     entry_point();
+//! }
+//!
+//!  #[cfg(not(feature = "perf_counters"))]
+//! fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+//! where
+//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+//! {
+//!     subscriber
+//! }
+//!
+//! #[cfg(feature = "perf_counters")]
+//! fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+//! where
+//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+//! {
+//!     use perf_event::events::Hardware;
+//!
+//!     subscriber.with(
+//!         PrintPerfCountersLayer::new(vec![
+//!             ("instructions".to_string(), Hardware::INSTRUCTIONS.into()),
+//!             ("cycles".to_string(), Hardware::CPU_CYCLES.into()),
+//!         ])
+//!         .unwrap(),
+//!     )
+//! }
+//!
+//! #[cfg(not(feature = "ittapi"))]
+//! fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+//! where
+//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+//! {
+//!     subscriber
+//! }
+//!
+//! #[cfg(feature = "ittapi")]
+//! fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+//! where
+//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+//! {
+//!     subscriber.with(
+//!         IttApiLayer::default(),
+//!     )
 //! }
 //! ```
 //!
@@ -55,6 +90,8 @@
 mod data;
 mod layers;
 
+#[cfg(feature = "ittapi")]
+pub use layers::ittapi::Layer as IttApiLayer;
 #[cfg(feature = "perf_counters")]
 pub use layers::print_perf_counters::Layer as PrintPerfCountersLayer;
 pub use layers::{
@@ -77,6 +114,7 @@ mod tests {
     use tracing::debug_span;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::prelude::*;
+    use tracing_subscriber::registry::LookupSpan;
 
     use super::*;
 
@@ -103,14 +141,17 @@ mod tests {
     }
 
     #[cfg(not(feature = "perf_counters"))]
-    fn with_with_perf_counters(subscriber: impl SubscriberExt) -> impl SubscriberExt {
+    fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+    where
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+    {
         subscriber
     }
 
     #[cfg(feature = "perf_counters")]
-    fn with_with_perf_counters<S>(subscriber: S) -> impl SubscriberExt
+    fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
     where
-        S: SubscriberExt + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
         use perf_event::events::Hardware;
 
@@ -123,13 +164,29 @@ mod tests {
         )
     }
 
+    #[cfg(not(feature = "ittapi"))]
+    fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+    where
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+    {
+        subscriber
+    }
+
+    #[cfg(feature = "ittapi")]
+    fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+    where
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+    {
+        subscriber.with(IttApiLayer::default())
+    }
+
     #[test]
     fn all_layers() {
-        with_with_perf_counters(
+        with_ittapi(with_perf_counters(
             tracing_subscriber::registry()
                 .with(PrintTreeLayer::default())
                 .with(CsvLayer::new("/tmp/output.csv")),
-        )
+        ))
         .init();
         make_spans();
     }
