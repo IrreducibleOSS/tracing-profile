@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, time::Instant};
 
+use super::EventCounts;
+
 #[derive(Debug)]
 pub struct CsvMetadata {
     pub start_time: Option<u64>,
@@ -11,4 +13,5 @@ pub struct CsvMetadata {
 pub struct GraphMetadata {
     pub start_time: Option<Instant>,
     pub fields: BTreeMap<String, String>,
+    pub event_counts: EventCounts,
 }

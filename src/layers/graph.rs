@@ -1,13 +1,15 @@
 // Copyright 2024 Ulvetanna Inc.
 use std::{
     collections::{BTreeMap, HashMap},
+    iter::zip,
     sync::Mutex,
     time::Instant,
 };
 
 use crate::{
     data::{
-        insert_to_span_storage, with_span_storage_mut, GraphMetadata, LogTree, StoringFieldVisitor,
+        insert_to_span_storage, with_span_storage_mut, EventCounts, GraphMetadata, LogTree,
+        StoringFieldVisitor,
     },
     err_msg,
 };
@@ -29,6 +31,10 @@ pub struct Config {
     /// Whether to display parent time minus time of all children as
     /// `[unaccounted]`. Useful to sanity check that you are measuring all the bottlenecks
     pub display_unaccounted: bool,
+
+    /// Whether to accumulate events of the children into the parent.
+    /// Default is true.
+    pub accumulate_events: bool,
 }
 
 impl Default for Config {
@@ -38,22 +44,36 @@ impl Default for Config {
             relevant_above_percent: 2.5,
             hide_below_percent: 1.0,
             display_unaccounted: false,
+            accumulate_events: true,
         }
     }
 }
 /// GraphLayer (internally called layer::graph)
-/// This Layer prints a call graph to stdout
+/// This Layer prints a call graph to stdout. Please note that this layer both prints data about spans and events.
+/// Depending on the `Config::accumulate_events` setting, the layer will either print the events of each span or accumulate the events of the children into the parent.
 ///
 /// example output:
 /// ```bash
 /// cargo test all_layers -- --nocapture
 ///
 /// running 1 test
-/// root span [ 123.79µs | 100.00% ]
-/// ├── child span1 [ 2.88µs | 2.32% ] { field1 = value1 }
-/// └── child span2 [ 51.00µs | 41.20% ] { field2 = value2 }
-///    ├── child span3 [ 1.88µs | 1.51% ] { field3 = value3 }
-///    └── child span4 [ 1.58µs | 1.28% ] { field4 = value4 }
+/// root span [ 178.94µs | 100.00% ]
+/// Events:
+///   event in span2: 1
+///   event in span3 { field5: value5 }: 2
+///
+/// ├── child span1 [ 4.63µs | 2.59% ] { field1 = value1 }
+/// └── child span2 [ 93.40µs | 52.20% ] { field2 = value2 }
+///     Events:
+///       event in span2: 1
+///       event in span3 { field5: value5 }: 2
+///     
+///    ├── child span3 [ 15.47µs | 8.64% ] { field3 = value3 }
+///    │   Events:
+///    │     event in span3 { field5: value5 }: 2
+///    │   
+///    └── child span4 [ 2.87µs | 1.60% ] { field4 = value4 }
+///
 /// test tests::all_layers ... ok
 /// ```
 pub struct Layer {
@@ -106,10 +126,11 @@ where
             return err_msg!("failed to get storage on_exit");
         };
 
-        let graph_node = GraphNode {
+        let mut graph_node = GraphNode {
             id: span.id().into_u64(),
             execution_duration: storage.start_time.map(|x| x.elapsed()).unwrap_or_default(),
             name: span.name().into(),
+            events: storage.event_counts.clone(),
             metadata: std::mem::take(&mut storage.fields),
             call_count: 1,
         };
@@ -117,6 +138,7 @@ where
         let Ok(mut graph) = self.graph.lock() else {
             return err_msg!("failed to get mutex");
         };
+
         match span.parent() {
             Some(p) => {
                 graph
@@ -126,6 +148,10 @@ where
                     .push(graph_node);
             }
             None => {
+                if graph.config.accumulate_events {
+                    graph_node.events += &graph.accumulate_children_events(graph_node.id);
+                }
+
                 let tree = graph.render_tree(&graph_node, graph_node.execution_duration);
                 graph.children.clear();
                 println!("{}", tree);
@@ -141,6 +167,7 @@ where
     ) {
         let mut storage = GraphMetadata {
             start_time: None,
+            event_counts: EventCounts::default(),
             fields: BTreeMap::new(),
         };
         // warning: the library user must use #[instrument(skip_all)] or else too much data will be logged
@@ -148,6 +175,24 @@ where
         attrs.record(&mut visitor);
 
         insert_to_span_storage(id, ctx, storage);
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if event.is_root() {
+            return;
+        }
+
+        let Some(span_id) = event
+            .parent()
+            .cloned()
+            .or_else(|| ctx.current_span().id().cloned())
+        else {
+            return;
+        };
+
+        with_span_storage_mut(&span_id, ctx, |storage: &mut GraphMetadata| {
+            storage.event_counts.record(event);
+        });
     }
 }
 
@@ -238,6 +283,36 @@ impl TracingGraph {
                 .collect(),
         }
     }
+
+    /// For each node accumulate the events of its children and return the total events.
+    fn accumulate_children_events(&mut self, id: u64) -> EventCounts {
+        let mut events = EventCounts::default();
+        let Some(children_ids) = self
+            .children
+            .get(&id)
+            .map(|children| children.iter().map(|x| x.id).collect::<Vec<_>>())
+        else {
+            return events;
+        };
+
+        let child_accumulated_events = children_ids
+            .iter()
+            .map(|child_id| self.accumulate_children_events(*child_id))
+            .collect::<Vec<_>>();
+
+        for (acc_events, child_node) in zip(
+            child_accumulated_events.iter(),
+            self.children
+                .get_mut(&id)
+                .expect("children are present")
+                .iter_mut(),
+        ) {
+            child_node.events += acc_events;
+            events += &child_node.events;
+        }
+
+        events
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -246,6 +321,7 @@ struct GraphNode {
     id: u64,
     execution_duration: std::time::Duration,
     metadata: BTreeMap<String, String>,
+    events: EventCounts,
     call_count: usize,
 }
 
@@ -272,6 +348,9 @@ impl GraphNode {
                 .map(|(k, v)| format!("{k} = {v}"))
                 .collect();
             info.push(format!("{{ {} }}", kv.join(", ")))
+        }
+        if !self.events.is_empty() {
+            info.push(format!("\nEvents:\n  {} \n", self.events.format("\n  ")));
         }
 
         let name = &self.name;
@@ -302,6 +381,8 @@ impl GraphNode {
     fn aggregate(mut self, other: &GraphNode) -> Self {
         self.execution_duration += other.execution_duration;
         self.call_count += other.call_count;
+        self.events += &other.events;
+
         self
     }
 }

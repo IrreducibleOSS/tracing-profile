@@ -1,4 +1,6 @@
-use std::{collections::BTreeMap, fmt::Write};
+// Copyright 2024 Ulvetanna Inc.
+
+use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
 
 pub struct StoringFieldVisitor<'a>(pub &'a mut BTreeMap<String, String>);
 
@@ -40,14 +42,20 @@ impl<'a> tracing::field::Visit for StoringFieldVisitor<'a> {
 pub struct WritingFieldVisitor<'a, Writer: Write> {
     is_first: bool,
     writer: &'a mut Writer,
+    separator: Cow<'static, str>,
 }
 
 impl<'a, Writer: Write> WritingFieldVisitor<'a, Writer> {
     #[allow(unused)]
     pub fn new(writer: &'a mut Writer) -> Self {
+        Self::new_with_separator(writer, Cow::Borrowed(", "))
+    }
+
+    pub fn new_with_separator(writer: &'a mut Writer, separator: Cow<'static, str>) -> Self {
         Self {
-            is_first: false,
+            is_first: true,
             writer,
+            separator,
         }
     }
 
@@ -55,7 +63,9 @@ impl<'a, Writer: Write> WritingFieldVisitor<'a, Writer> {
         if self.is_first {
             self.is_first = false;
         } else {
-            write!(self.writer, ", ").expect("failed to write separator");
+            self.writer
+                .write_str(&self.separator)
+                .expect("failed to write separator");
         }
     }
 }

@@ -111,7 +111,7 @@ pub(crate) use err_msg;
 
 #[cfg(test)]
 mod tests {
-    use tracing::debug_span;
+    use tracing::{debug_span, event, Level};
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::registry::LookupSpan;
@@ -130,9 +130,13 @@ mod tests {
         let span3 = debug_span!("child span2", field2 = "value2");
         let _scope3 = span3.enter();
 
+        event!(name: "event in span2", Level::DEBUG, {});
+
         // child spans 3 and 4 are siblings
         let span = debug_span!("child span3", field3 = "value3");
         let scope = span.enter();
+        event!(name: "event in span3", Level::DEBUG, {field5 = "value5"});
+        event!(name: "event in span3", Level::DEBUG, {field5 = "value5"});
         drop(scope);
 
         let span = debug_span!("child span4", field4 = "value4");

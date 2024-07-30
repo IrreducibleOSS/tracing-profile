@@ -1,8 +1,10 @@
+mod event_counts;
 mod field_visitor;
 mod log_tree;
 mod span_metadata;
 mod storage_utils;
 
+pub use event_counts::EventCounts;
 #[allow(unused_imports)]
 pub use field_visitor::{StoringFieldVisitor, WritingFieldVisitor};
 pub use log_tree::LogTree;
