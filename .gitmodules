@@ -1,0 +1,5 @@
+[submodule "perfetto-sys/cpp/perfetto"]
+	path = perfetto-sys/cpp/perfetto
+	url = https://android.googlesource.com/platform/external/perfetto/
+	branch = releases/v45.x
+	tag = v45.0

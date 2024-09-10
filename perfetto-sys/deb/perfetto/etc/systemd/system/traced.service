@@ -1,0 +1,9 @@
+[Unit]
+Description=Traced Service
+PartOf=perfetto.service
+
+[Service]
+ExecStart=/opt/perfetto/traced
+
+[Install]
+WantedBy=multi-user.target

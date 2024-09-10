@@ -79,6 +79,12 @@ The `IttApiLayer` adds one `ittapi::Task` for each span at runtime allowing obse
 
 `ittapi` crate feature enables this functionality.
 
+### Perfetto layer
+
+The `Perfetto` layer
+ - for each tracing span span creates a single Perfetto event with the same lifetime
+ - for each event that has `counter` property set to true updates the corresponding Perfetto counter value using the `value` property of the event.
+
 ### Example Test
 
 ```rust

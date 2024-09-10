@@ -5,10 +5,11 @@
 //! a span took to execute, along with any user supplied metadata and
 //! information necessary to construct a call graph from the resulting logs.
 //!
-//! Three `Layer` implementations are provided:
+//! Multiple `Layer` implementations are provided:
 //!     `CsvLayer`: logs data in CSV format
 //!     `PrintTreeLayer`: prints a call graph
 //!     `PrintPerfCountersLayer`: prints aggregated performance counters for each span.
+//!     `PerfettoLayer`: Connects to a system-wide perfetto logging service which will create a fused trace. Be warned - the program will block until a connection is established with perfetto's traced service.
 //!     `IttApiLayer`: logs data in Intel's [ITT API](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html)
 //!
 //! ```
@@ -99,6 +100,14 @@ pub use layers::{
     graph::{Config as PrintTreeConfig, Layer as PrintTreeLayer},
 };
 
+#[cfg(feature = "perfetto")]
+pub use layers::perfetto::{CategorySettings as PerfettoCategorySettings, Layer as PerfettoLayer};
+#[cfg(feature = "perfetto")]
+pub use perfetto_sys::{
+    Backend as PerfettoBackend, CounterCategory as PerfettoCounterCategory,
+    EventCategory as PerfettoEventCategory,
+};
+
 // use this instead of eprintln!
 macro_rules! err_msg {
     ($($arg:tt)*) => {{
@@ -127,16 +136,16 @@ mod tests {
         let scope2 = span2.enter();
         drop(scope2);
 
-        let span3 = debug_span!("child span2", field2 = "value2");
+        let span3 = debug_span!("child span2", field2 = "value2", counter = true, value = 20);
         let _scope3 = span3.enter();
 
-        event!(name: "event in span2", Level::DEBUG, {});
+        event!(name: "event in span2", Level::DEBUG, {value = 100});
 
         // child spans 3 and 4 are siblings
         let span = debug_span!("child span3", field3 = "value3");
         let scope = span.enter();
-        event!(name: "event in span3", Level::DEBUG, {field5 = "value5"});
-        event!(name: "event in span3", Level::DEBUG, {field5 = "value5"});
+        event!(name: "event in span3", Level::DEBUG, {field5 = "value5", counter = true, value = 30});
+        event!(name: "event in span3", Level::DEBUG, {field5 = "value5", counter = true, value = 40});
         drop(scope);
 
         let span = debug_span!("child span4", field4 = "value4");
@@ -184,14 +193,37 @@ mod tests {
         subscriber.with(IttApiLayer::default())
     }
 
+    #[cfg(not(feature = "perfetto"))]
+    fn with_perfetto<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+    where
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+    {
+        subscriber
+    }
+
+    #[cfg(feature = "perfetto")]
+    fn with_perfetto<S>(subscriber: S) -> (impl SubscriberExt + for<'lookup> LookupSpan<'lookup>)
+    where
+        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+    {
+        subscriber.with(PerfettoLayer::new(
+            PerfettoBackend::InProcess,
+            layers::perfetto::CategorySettings {
+                default_counter_category: perfetto_sys::CounterCategory::Default,
+                default_span_category: perfetto_sys::EventCategory::Default,
+            },
+        ))
+    }
+
     #[test]
     fn all_layers() {
-        with_ittapi(with_perf_counters(
+        let subscriber = with_perfetto(with_ittapi(with_perf_counters(
             tracing_subscriber::registry()
                 .with(PrintTreeLayer::default())
                 .with(CsvLayer::new("/tmp/output.csv")),
-        ))
-        .init();
-        make_spans();
+        )));
+
+        subscriber.init();
+        _ = make_spans();
     }
 }

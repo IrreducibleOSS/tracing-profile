@@ -1,0 +1,9 @@
+#!/bin/bash
+
+echo "perfetto.deb postinst"
+sudo systemctl daemon-reload
+
+sudo systemctl enable traced.service
+sudo systemctl enable traced_probes.service
+sudo systemctl enable perfetto.service
+

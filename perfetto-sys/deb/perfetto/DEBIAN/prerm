@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo "perfetto.deb prerm"
+
+sudo systemctl stop perfetto.service
+sudo systemctl stop traced_probes.service
+sudo systemctl stop traced.service
+
+sudo systemctl disable perfetto.service
+sudo systemctl disable traced_probes.service
+sudo systemctl disable traced.service
+

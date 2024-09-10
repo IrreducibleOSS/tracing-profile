@@ -1,11 +1,17 @@
+use nix::sys::time::TimeValLike;
+use nix::time::{clock_gettime, ClockId};
+use std::collections::HashMap;
+use std::fmt;
 use std::io::Write;
-use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::mpsc;
 use std::{collections::BTreeMap, time::Instant};
-use tracing::span;
+use tracing::{
+    field::{Field, Visit},
+    span,
+};
 
-use crate::data::{self, with_span_storage_mut, StoringFieldVisitor};
+use crate::data::{with_span_storage_mut, CsvMetadata, StoringFieldVisitor};
 use crate::err_msg;
 
 /// CsvLayer (internally called layer::csv)  
@@ -44,36 +50,33 @@ use crate::err_msg;
 /// # terminal output omitted
 /// cat /tmp/output.csv
 ///
-/// id,parent_id,elapsed_ns,span_name,file_name,call_depth,metadata
-/// 2,1,3194,child span1,src/lib.rs,2,{"field1":"value1"}
-/// 4,3,1105,child span3,src/lib.rs,3,{"field3":"value3"}
-/// 5,3,1013,child span4,src/lib.rs,3,{"field4":"value4"}
-/// 3,1,34166,child span2,src/lib.rs,2,{"field2":"value2"}
-/// 1,0,79099,root span,src/lib.rs,1,{}
+/// span_name,start_ns,elapsed_ns,metadata
+/// child span1,202586,31562,{"field1":"value1"}
+/// child span3,318204,13639,{"field3":"value3"}
+/// child span4,379085,11041,{"field4":"value4"}
+/// child span2,296465,145149,{"field2":"value2"}
+/// root span,169514,416371,{}
 /// ```
+
+#[derive(Default)]
+struct CpuTimeEvent {
+    map: HashMap<String, u64>,
+}
+
+impl Visit for CpuTimeEvent {
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        *self.map.entry(field.name().to_string()).or_insert(0) += value;
+    }
+
+    fn record_str(&mut self, _: &Field, _: &str) {}
+    fn record_i64(&mut self, _: &Field, _: i64) {}
+    fn record_bool(&mut self, _: &Field, _: bool) {}
+    fn record_debug(&mut self, _: &Field, _: &dyn fmt::Debug) {}
+}
 
 pub struct Layer {
     tx: mpsc::Sender<String>,
     init_time: Instant,
-}
-
-// if Csvlayer and GraphLayer are used at the same time, there will be a problem if
-// they both register an extension of the same type. The newtype pattern is used here
-// to avoid that problem.
-struct CsvMetadata(data::CsvMetadata);
-
-impl Deref for CsvMetadata {
-    type Target = data::CsvMetadata;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for CsvMetadata {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
 }
 
 impl Layer {
@@ -103,12 +106,24 @@ where
     S: for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     // handles log events like debug!
-    fn on_event(
-        &self,
-        _event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        // don't care about these
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if event.metadata().name() != "cpu_time" {
+            return;
+        }
+
+        let span = ctx.current_span();
+        let Some(parent_id) = span.id() else {
+            eprintln!("CsvLayer failed to get current span for cpu_time event");
+            return;
+        };
+        let mut data = CpuTimeEvent::default();
+        event.record(&mut data);
+
+        if let Some(time_ns) = data.map.get("rayon_ns") {
+            with_span_storage_mut(parent_id, ctx, |storage: &mut CsvMetadata| {
+                storage.rayon_ns += time_ns;
+            });
+        }
     }
 
     fn on_record(
@@ -128,47 +143,53 @@ where
             storage
                 .start_time
                 .replace(self.init_time.elapsed().as_nanos() as u64);
+            storage.cpu_start_time.replace(
+                clock_gettime(ClockId::CLOCK_THREAD_CPUTIME_ID).expect("failed to get system time"),
+            );
         });
     }
 
     fn on_exit(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        if let Some(span) = ctx.span(id) {
-            let parent = span.parent();
+        let rayon_ns = if let Some(span) = ctx.span(id) {
             if let Some(storage) = span.extensions_mut().get_mut::<CsvMetadata>() {
+                let end_cpu_time = clock_gettime(ClockId::CLOCK_THREAD_CPUTIME_ID)
+                    .expect("failed to get system time");
                 let end_time = self.init_time.elapsed().as_nanos() as u64;
                 let start_time = storage.start_time.unwrap_or(end_time);
-                let thread_id = format!("{:?}", std::thread::current().id());
-                let thread_name = format!("{:?}", std::thread::current().name());
 
-                let fields = std::mem::take(&mut storage.fields);
+                let mut fields = std::mem::take(&mut storage.fields);
+                if storage.rayon_ns > 0 {
+                    fields.insert("rayon_ns".into(), storage.rayon_ns.to_string());
+                }
+
+                let cpu_diff = (end_cpu_time - storage.cpu_start_time.unwrap_or(end_cpu_time))
+                    .num_nanoseconds();
+                let mut cpu_ns = if cpu_diff > 0 { cpu_diff as u64 } else { 0_u64 };
+                cpu_ns += storage.rayon_ns;
 
                 let log_row = LogRow {
-                    id: span.id().into_u64(),
-                    parent_id: parent
-                        .as_ref()
-                        .map(|p| p.id().into_u64())
-                        .unwrap_or_default(),
                     span_name: span.name().into(),
-                    file_name: span
-                        .metadata()
-                        .file()
-                        .map(|x| x.to_string())
-                        .unwrap_or_default(),
                     start_ns: start_time,
-                    end_ns: end_time,
-                    thread_id,
-                    thread_name,
-                    call_depth: storage.call_depth,
+                    elapsed_ns: end_time - start_time,
+                    cpu_ns,
                     fields,
                 };
-
                 let msg = format!("{log_row}\n");
                 let _ = self.tx.send(msg);
+                storage.rayon_ns
             } else {
                 err_msg!("failed to get storage on_exit");
+                0
             }
         } else {
             err_msg!("failed to get span on_exit");
+            0
+        };
+
+        if let Some(parent_id) = ctx.span(id).and_then(|x| x.parent().map(|y| y.id())) {
+            with_span_storage_mut(&parent_id, ctx, |storage: &mut CsvMetadata| {
+                storage.rayon_ns += rayon_ns;
+            });
         }
     }
 
@@ -183,17 +204,12 @@ where
             return;
         };
 
-        let parent_call_depth = span
-            .parent()
-            .as_ref()
-            .and_then(|p| p.extensions().get::<CsvMetadata>().map(|x| x.call_depth))
-            .unwrap_or_default();
-
-        let mut storage = CsvMetadata(data::CsvMetadata {
+        let mut storage = CsvMetadata {
             start_time: None,
-            call_depth: parent_call_depth + 1,
+            cpu_start_time: None,
+            rayon_ns: 0,
             fields: BTreeMap::new(),
-        });
+        };
 
         // warning: the library user must use #[instrument(skip_all)] or else too much data will be logged
         let mut visitor = StoringFieldVisitor(&mut storage.fields);
@@ -206,21 +222,16 @@ where
 
 #[derive(Debug)]
 struct LogRow {
-    id: u64,
-    parent_id: u64,
     span_name: String,
-    file_name: String,
-    call_depth: u64,
     start_ns: u64,
-    end_ns: u64,
-    thread_id: String,
-    thread_name: String,
+    elapsed_ns: u64,
+    cpu_ns: u64,
     fields: BTreeMap<String, String>,
 }
 
 impl LogRow {
     fn header<'a>() -> &'a str {
-        "id,parent_id,elapsed_ns,start_ns,end_ns,thread_id,thread_name,span_name,file_name,call_depth,metadata\n"
+        "span_name,start_ns,elapsed_ns,cpu_ns,metadata\n"
     }
 }
 
@@ -237,18 +248,113 @@ impl std::fmt::Display for LogRow {
         let fields = format!("{{{}}}", kv.join("; "));
         write!(
             f,
-            "{},{},{},{},{},{},{},{},{},{},{}",
-            self.id,
-            self.parent_id,
-            self.end_ns - self.start_ns,
-            self.start_ns,
-            self.end_ns,
-            self.thread_id,
-            self.thread_name,
-            self.span_name,
-            self.file_name,
-            self.call_depth,
-            fields
+            "{},{},{},{},{}",
+            self.span_name, self.start_ns, self.elapsed_ns, self.cpu_ns, fields
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use rayon::iter::IntoParallelIterator;
+    use rayon::prelude::*;
+    use tracing::debug_span;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::prelude::*;
+
+    #[test]
+    fn cpu_time1() {
+        tracing_subscriber::registry()
+            .with(Layer::new("/tmp/output1.csv"))
+            .init();
+
+        let _scope = debug_span!("parent span").entered();
+        for _ in 1..5 {
+            std::thread::sleep(Duration::from_secs(1));
+        }
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+    }
+
+    #[test]
+    fn cpu_time2() {
+        tracing_subscriber::registry()
+            .with(Layer::new("/tmp/output2.csv"))
+            .init();
+
+        let _scope = debug_span!("parent span").entered();
+        (0..5).into_par_iter().for_each(|_| {
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+        });
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+    }
+
+    #[test]
+    fn cpu_time3() {
+        tracing_subscriber::registry()
+            .with(Layer::new("/tmp/output3.csv"))
+            .init();
+
+        let _scope = debug_span!("parent span").entered();
+        (0..5).into_par_iter().for_each(|_| {
+            std::thread::sleep(Duration::from_secs(1));
+        });
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+    }
+
+    #[test]
+    fn cpu_time4() {
+        tracing_subscriber::registry()
+            .with(Layer::new("/tmp/output4.csv"))
+            .init();
+
+        let _scope = debug_span!("parent span").entered();
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+
+        let _scope2 = debug_span!("child span").entered();
+
+        (0..5).into_par_iter().for_each(|_| {
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+        });
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+    }
+
+    #[test]
+    fn cpu_time5() {
+        tracing_subscriber::registry()
+            .with(Layer::new("/tmp/output5.csv"))
+            .init();
+
+        let _scope = debug_span!("parent span").entered();
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
+
+        (0..2).into_par_iter().for_each(|_| {
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+        });
+
+        let _scope2 = debug_span!("child span").entered();
+
+        (0..5).into_par_iter().for_each(|_| {
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+        });
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 1 {}
     }
 }

@@ -1,0 +1,11 @@
+[Unit]
+Description=Traced Probes Service
+PartOf=perfetto.service
+Requires=traced.service
+After=traced.service
+
+[Service]
+ExecStart=/opt/perfetto/traced_probes
+
+[Install]
+WantedBy=multi-user.target

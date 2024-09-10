@@ -1,0 +1,6 @@
+Source: perfetto
+Version: 0.3.0
+Maintainer: Irreducible
+Package: perfetto
+Architecture: amd64
+Description: Contains executables and systemd services needed to collect a fused perfetto trace
