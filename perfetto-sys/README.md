@@ -25,4 +25,4 @@ sudo dpkg -r perfetto
 ```
 
 # In process mode  
-When using in-process mode, the environment variable `PERFETTO_OUTPUT` will be used for the output file. If this variable is not set, a file called `tracing.perfetto-trace` will be saved in the current woriking directory.
+When using in-process mode, all the data will be written to a local file, path to which can be set by passing the argument to `init_perfetto` function. If the value is null `tracing.perfetto-trace` will be used as a default value. When system mode is chosen this argument is ignored.

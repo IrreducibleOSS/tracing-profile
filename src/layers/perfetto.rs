@@ -1,4 +1,4 @@
-use perfetto_sys::{CounterCategory, CounterValue, EventCategory};
+use perfetto_sys::{CounterCategory, CounterValue, EventCategory, PerfettoGuard};
 use std::fmt::{self, Debug};
 use tracing::{
     field::{Field, Visit},
@@ -44,9 +44,11 @@ impl Visit for CounterVisitor {
 }
 
 /// Default categoties for events and counters.
-pub struct CategorySettings {
+pub struct PerfettoSettings {
     pub default_span_category: EventCategory,
     pub default_counter_category: CounterCategory,
+    pub trace_file_path: Option<String>,
+    pub buffer_size_kb: Option<usize>,
 }
 
 struct CategoryVisitor<Category> {
@@ -77,16 +79,20 @@ where
 }
 
 pub struct Layer {
-    settings: CategorySettings,
-    _perfetto_guard: perfetto_sys::PerfettoGuard,
+    settings: PerfettoSettings,
 }
 
 impl Layer {
-    pub fn new(backend: crate::PerfettoBackend, settings: CategorySettings) -> Self {
-        Self {
-            settings,
-            _perfetto_guard: perfetto_sys::PerfettoGuard::new(backend),
-        }
+    pub fn new(
+        backend: crate::PerfettoBackend,
+        settings: PerfettoSettings,
+    ) -> (Self, PerfettoGuard) {
+        let guard = PerfettoGuard::new(
+            backend,
+            settings.trace_file_path.as_deref(),
+            settings.buffer_size_kb.clone().unwrap_or(50 * 1024),
+        );
+        (Self { settings }, guard)
     }
 }
 

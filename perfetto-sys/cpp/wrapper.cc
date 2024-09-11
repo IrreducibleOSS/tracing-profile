@@ -61,7 +61,7 @@ struct SdkTracingSession : TracingSessionGuard {
 
 // used for in-process monitoring
 struct ApiTracingSession : TracingSessionGuard {
-	ApiTracingSession() {
+	ApiTracingSession(std::string output_file, const size_t buffer_size_kb) : output_file(std::move(output_file)) {
 		perfetto::TracingInitArgs args;
 		args.backends = perfetto::BackendType::kInProcessBackend;
 		args.enable_system_consumer = false;
@@ -79,7 +79,7 @@ struct ApiTracingSession : TracingSessionGuard {
 		// https://perfetto.dev/docs/concepts/buffers
 		// this is probably larger than needed but the space is
 		// available
-		cfg.add_buffers()->set_size_kb(50 * 1024);
+		cfg.add_buffers()->set_size_kb(buffer_size_kb);
 
 		// tells how often the producer should send data to the tracing
 		// service
@@ -98,18 +98,15 @@ struct ApiTracingSession : TracingSessionGuard {
 		this->tracing_session->Setup(cfg);
 		this->tracing_session->StartBlocking();
 	}
+
 	~ApiTracingSession() {
 		this->tracing_session->FlushBlocking(100);
 		this->tracing_session->StopBlocking();
 		std::vector<char> trace_data(
 		    tracing_session->ReadTraceBlocking());
 
-		const char *output_file = std::getenv("PERFETTO_OUTPUT");
-		if (output_file == nullptr) {
-			output_file = "tracing.perfetto-trace";
-		}
 		std::ofstream output;
-		output.open(output_file,
+		output.open(output_file.c_str(),
 			    std::ios::out | std::ios::binary | std::ios::trunc);
 		output.write(&trace_data[0], trace_data.size());
 		output.close();
@@ -117,16 +114,18 @@ struct ApiTracingSession : TracingSessionGuard {
 
 private:
 	std::unique_ptr<perfetto::TracingSession> tracing_session;
+	std::string output_file;
 };
 
-void *init_perfetto(uint32_t backend) {
+void *init_perfetto(uint32_t backend, const char* output_file, size_t buffer_size_kb) {
 	auto backend_type = static_cast<perfetto::BackendType>(backend);
 	TracingSessionGuard *ptr = nullptr;
 	if (backend_type == perfetto::BackendType::kSystemBackend) {
 		ptr = new SdkTracingSession();
 	} else {
 		// warning: silently refuses custom backend
-		ptr = new ApiTracingSession();
+		const auto* output_file_path = output_file ? output_file : "tracing.perfetto-trace"; 
+		ptr = new ApiTracingSession(output_file_path, buffer_size_kb);
 	}
 	auto p = (void *)(ptr);
 	return p;

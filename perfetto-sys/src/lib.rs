@@ -8,7 +8,7 @@ use std::{
 };
 
 extern "C" {
-    fn init_perfetto(backend: u32) -> *mut c_void;
+    fn init_perfetto(backend: u32, output_path: *const i8, buffer_size: usize) -> *mut c_void;
     fn deinit_perfetto(guard: *mut c_void);
     fn is_category_enabled(category: *const c_char) -> bool;
 }
@@ -38,8 +38,15 @@ pub enum Backend {
 
 impl PerfettoGuard {
     /// Initializes system wide tracing. Will block the current thread until it establishes a connection to the perfetto tracing service.
-    pub fn new(backend: Backend) -> Self {
-        let ptr = unsafe { init_perfetto(backend as u32) };
+    /// `output_path` is the path to the trace file for in-process mode. If `None`, "tracing.perfetto-trace" will be used.
+    /// `buffer_size_kb` is the size of the buffer for in-process mode in kilobytes. 
+    pub fn new(backend: Backend, output_path: Option<&str>, buffer_size_kb: usize) -> Self {
+        let output_path = output_path.map(|s| CString::new(s).unwrap());
+        let output_path_ptr = output_path
+            .as_ref()
+            .map(|s| s.as_ptr())
+            .unwrap_or(std::ptr::null());
+        let ptr = unsafe { init_perfetto(backend as u32, output_path_ptr, buffer_size_kb) };
         Self { ptr }
     }
 }
@@ -131,14 +138,14 @@ mod tests {
     #[test]
     fn test_backend() {
         assert!(!category_enabled("zkp"));
-        let _guard = PerfettoGuard::new(Backend::System);
+        let _guard = PerfettoGuard::new(Backend::System, None, 10);
         assert!(category_enabled("zkp"));
     }
 
     #[test]
     fn test_in_process() {
         assert!(!category_enabled("zkp"));
-        let _guard = PerfettoGuard::new(Backend::InProcess);
+        let _guard = PerfettoGuard::new(Backend::InProcess, None, 10);
         assert!(category_enabled("zkp"));
     }
 }

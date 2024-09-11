@@ -374,6 +374,10 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/trace_categories.cc");
     println!("cargo:rerun-if-changed=cpp/trace_categories.h");
     println!("cargo:rerun-if-changed=Cargo.lock");
+    if let Ok(file_name) = env::var("PERFETTO_INTERFACE_FILE") {
+        println!("cargo:rerun-if-changed={}", file_name);
+    }
+    println!("cargo::rerun-if-env-changed=PERFETTO_INTERFACE_FILE");
     println!(
         "cargo:rustc-link-search=native={}/build",
         build_dir.display()

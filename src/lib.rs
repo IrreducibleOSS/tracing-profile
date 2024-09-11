@@ -101,11 +101,11 @@ pub use layers::{
 };
 
 #[cfg(feature = "perfetto")]
-pub use layers::perfetto::{CategorySettings as PerfettoCategorySettings, Layer as PerfettoLayer};
+pub use layers::perfetto::{Layer as PerfettoLayer, PerfettoSettings as PerfettoCategorySettings};
 #[cfg(feature = "perfetto")]
 pub use perfetto_sys::{
     Backend as PerfettoBackend, CounterCategory as PerfettoCounterCategory,
-    EventCategory as PerfettoEventCategory,
+    EventCategory as PerfettoEventCategory, PerfettoGuard,
 };
 
 // use this instead of eprintln!
@@ -120,6 +120,7 @@ pub(crate) use err_msg;
 
 #[cfg(test)]
 mod tests {
+    use cfg_if::cfg_if;
     use tracing::{debug_span, event, Level};
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::prelude::*;
@@ -153,71 +154,76 @@ mod tests {
         drop(scope);
     }
 
-    #[cfg(not(feature = "perf_counters"))]
     fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
     where
         S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
-        subscriber
+        cfg_if! {
+            if #[cfg(feature = "perf_counters")] {
+                use perf_event::events::Hardware;
+
+                subscriber.with(
+                    PrintPerfCountersLayer::new(vec![
+                        ("instructions".to_string(), Hardware::INSTRUCTIONS.into()),
+                        ("cycles".to_string(), Hardware::CPU_CYCLES.into()),
+                    ])
+                    .unwrap(),
+                )
+            } else {
+                subscriber
+            }
+        }
     }
 
-    #[cfg(feature = "perf_counters")]
-    fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        use perf_event::events::Hardware;
-
-        subscriber.with(
-            PrintPerfCountersLayer::new(vec![
-                ("instructions".to_string(), Hardware::INSTRUCTIONS.into()),
-                ("cycles".to_string(), Hardware::CPU_CYCLES.into()),
-            ])
-            .unwrap(),
-        )
-    }
-
-    #[cfg(not(feature = "ittapi"))]
     fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
     where
         S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
-        subscriber
-    }
-
-    #[cfg(feature = "ittapi")]
-    fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        subscriber.with(IttApiLayer::default())
+        cfg_if! {
+            if #[cfg(feature = "ittapi")] {
+                subscriber.with(IttApiLayer::default())
+            } else {
+                subscriber
+            }
+        }
     }
 
     #[cfg(not(feature = "perfetto"))]
-    fn with_perfetto<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
+    fn with_perfetto<S>(
+        subscriber: S,
+    ) -> (impl SubscriberExt + for<'lookup> LookupSpan<'lookup>, ())
     where
         S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
-        subscriber
+        (subscriber, ())
     }
 
     #[cfg(feature = "perfetto")]
-    fn with_perfetto<S>(subscriber: S) -> (impl SubscriberExt + for<'lookup> LookupSpan<'lookup>)
+    fn with_perfetto<S>(
+        subscriber: S,
+    ) -> (
+        impl SubscriberExt + for<'lookup> LookupSpan<'lookup>,
+        PerfettoGuard,
+    )
     where
         S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
-        subscriber.with(PerfettoLayer::new(
+        let (layer, guard) = PerfettoLayer::new(
             PerfettoBackend::InProcess,
-            layers::perfetto::CategorySettings {
+            layers::perfetto::PerfettoSettings {
                 default_counter_category: perfetto_sys::CounterCategory::Default,
                 default_span_category: perfetto_sys::EventCategory::Default,
+                trace_file_path: None,
+                buffer_size_kb: None,
             },
-        ))
+        );
+
+        (subscriber.with(layer), guard)
     }
 
     #[test]
     fn all_layers() {
-        let subscriber = with_perfetto(with_ittapi(with_perf_counters(
+        let (subscriber, _guard) = with_perfetto(with_ittapi(with_perf_counters(
             tracing_subscriber::registry()
                 .with(PrintTreeLayer::default())
                 .with(CsvLayer::new("/tmp/output.csv")),
