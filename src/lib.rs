@@ -95,6 +95,12 @@ mod layers;
 pub use layers::ittapi::Layer as IttApiLayer;
 #[cfg(feature = "perf_counters")]
 pub use layers::print_perf_counters::Layer as PrintPerfCountersLayer;
+#[cfg(feature = "perf_counters")]
+pub use { perf_event::events::Event as PerfEvent,
+    perf_event::events::Hardware as PerfHardwareEvent,
+    perf_event::events::Software as PerfSoftwareEvent,
+    perf_event::events::Cache as PerfCacheEvent,
+};
 pub use layers::{
     csv::Layer as CsvLayer,
     graph::{Config as PrintTreeConfig, Layer as PrintTreeLayer},
@@ -160,12 +166,10 @@ mod tests {
     {
         cfg_if! {
             if #[cfg(feature = "perf_counters")] {
-                use perf_event::events::Hardware;
-
                 subscriber.with(
                     PrintPerfCountersLayer::new(vec![
-                        ("instructions".to_string(), Hardware::INSTRUCTIONS.into()),
-                        ("cycles".to_string(), Hardware::CPU_CYCLES.into()),
+                        ("instructions".to_string(), PerfHardwareEvent::INSTRUCTIONS.into()),
+                        ("cycles".to_string(), PerfHardwareEvent::CPU_CYCLES.into()),
                     ])
                     .unwrap(),
                 )
