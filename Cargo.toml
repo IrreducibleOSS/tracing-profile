@@ -4,7 +4,7 @@ edition = "2021"
 name = "tracing-profile"
 description = "A span based profiler, utilizing the tracing crate"
 keywords = ["metrics", "profiling", "tracing"]
-license-file = "LICENSE.txt"
+license = "Apache-2.0"
 readme = "README.md"
 repository = "https://gitlab.com/IrreducibleOSS/tracing-profile"
 
@@ -14,7 +14,7 @@ nix = { version = "0.29", features = ["time"] }
 perf-event = { version = "0.4.8", optional = true }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
-perfetto-sys = { path = "perfetto-sys", optional = true }
+perfetto-sys = { package = "tracing-profile-perfetto-sys", version = "0.7.0", path = "perfetto-sys", optional = true }
 
 [dev-dependencies]
 rayon = "1.10.0"

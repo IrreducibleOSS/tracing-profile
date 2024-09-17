@@ -1,7 +1,26 @@
 [package]
-name = "perfetto-sys"
-version = "0.4.0"
+name = "tracing-profile-perfetto-sys"
+version = "0.7.0"
 edition = "2021"
+description = "Low-level bindings to Perfetto, optionally used by the tracing-profile crate"
+keywords = ["profiling", "tracing", "perfetto"]
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://gitlab.com/IrreducibleOSS/tracing-profile"
+include = [
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "examples/*",
+    "src/*",
+    "cpp/CMakeLists.txt",
+    "cpp/trace_categories.cc",
+    "cpp/wrapper.h",
+    "cpp/wrapper.cc",
+    "cpp/perfetto/sdk/*",
+    "cpp/perfetto/LICENSE",
+    "cpp/perfetto/README.md",
+]
 
 [dependencies]
 
