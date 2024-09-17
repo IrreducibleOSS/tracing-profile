@@ -1,9 +1,9 @@
-use std::{env, fs::create_dir_all, path::Path, process::Command};
+use std::{env, fs::create_dir_all, path::Path};
 
-use cmake::Config;
 use convert_case::{Case, Casing};
 use serde::Deserialize;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -70,10 +70,9 @@ fn rs_category_enum_member(category: &str) -> String {
     category.to_case(Case::UpperCamel)
 }
 
-fn generate_trace_categories_h(dir: &Path, categories: &[Category]) {
-    let categories_file = Path::new(&dir).join("trace_categories.h");
-    let mut writer =
-        std::fs::File::create(categories_file).expect("cannot create 'trace_categories.h'");
+fn generate_trace_categories_h(paths: &GeneratedMeta, categories: &[Category]) {
+    let mut writer = std::fs::File::create(&paths.categories_header_path)
+        .expect("cannot create 'trace_categories.h'");
 
     let category_literals = categories
         .iter()
@@ -116,7 +115,7 @@ PERFETTO_DEFINE_CATEGORIES(
     .unwrap();
 }
 
-fn generate_interface_wrappers(cpp_dir: &Path, rs_dir: &Path, interface: &InterfaceData) {
+fn generate_interface_wrappers(paths: &GeneratedMeta, interface: &InterfaceData) {
     let mut cpp_method_decls = Vec::new();
     let mut cpp_method_defs = Vec::new();
 
@@ -220,9 +219,8 @@ void counter_{0}(const char* label, {2} value) {{
     }
 
     // generate 'interface_wrapper.h'
-    let wrappers_header = Path::new(&cpp_dir).join("interface_wrapper.h");
-    let mut writer =
-        std::fs::File::create(wrappers_header).expect("cannot create 'interface_wrapper.h'");
+    let mut writer = std::fs::File::create(&paths.wrappers_header_path)
+        .expect("cannot create 'interface_wrapper.h'");
     write!(
         writer,
         r#"#pragma once
@@ -238,9 +236,8 @@ extern "C" {{
     .unwrap();
 
     // generate 'interface_wrapper.cc'
-    let wrappers_source = Path::new(&cpp_dir).join("interface_wrapper.cc");
     let mut writer =
-        std::fs::File::create(wrappers_source).expect("cannot create 'interface_wrapper.cc'");
+        std::fs::File::create(&paths.wrappers_source_path).expect("cannot create 'interface_wrapper.cc'");
     write!(
         writer,
         r#"#include "interface_wrapper.h"
@@ -255,8 +252,7 @@ extern "C" {{
     .unwrap();
 
     // generate 'interface.rs'
-    let rs_interface = Path::new(&rs_dir).join("interface.rs");
-    let mut writer = std::fs::File::create(rs_interface).expect("cannot create 'interface.rs'");
+    let mut writer = std::fs::File::create(&paths.rs_interface_path).expect("cannot create 'interface.rs'");
     write!(writer,
 r#"
 extern "C" {{
@@ -330,7 +326,7 @@ rs_update_counter_match_cases.join(""),
 ).unwrap();
 }
 
-fn generate_interface() {
+fn generate_interface() -> GeneratedMeta {
     let interface = parse_interface();
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
@@ -340,49 +336,47 @@ fn generate_interface() {
     let rs_dir = generated_dir.join("rs");
     create_dir_all(&rs_dir).expect("cannot create 'rs' directory");
 
-    generate_trace_categories_h(&cpp_dir, &interface.categories);
-    generate_interface_wrappers(&cpp_dir, &rs_dir, &interface);
+    let paths = GeneratedMeta {
+        cpp_header_dir: cpp_dir.clone(),
+        categories_header_path: Path::new(&cpp_dir).join("trace_categories.h"),
+        wrappers_header_path: Path::new(&cpp_dir).join("interface_wrapper.h"),
+        wrappers_source_path: Path::new(&cpp_dir).join("interface_wrapper.cc"),
+        rs_interface_path: Path::new(&rs_dir).join("interface.rs"),
+    };
+    generate_trace_categories_h(&paths, &interface.categories);
+    generate_interface_wrappers(&paths, &interface);
+
+    paths
+}
+
+struct GeneratedMeta {
+    cpp_header_dir: PathBuf,
+    categories_header_path: PathBuf,
+    wrappers_header_path: PathBuf,
+    wrappers_source_path: PathBuf,
+    rs_interface_path: PathBuf,
 }
 
 //https://android.googlesource.com/platform/external/perfetto/+/refs/tags/android-14.0.0_r50/examples/sdk/
 //https://perfetto.dev/docs/instrumentation/tracing-sdk
 fn main() {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let curr_dir = Path::new(&manifest_dir);
-    Command::new("git")
-        .arg("submodule")
-        .arg("update")
-        .arg("--init")
-        .current_dir(curr_dir)
-        .status()
-        .unwrap();
-
-    // generate the interface files
-    generate_interface();
-
-    let build_dir = Config::new("cpp").no_build_target(true).build();
-    // without this, the cmake crate attempts to install the static library. i don't want to do that.
-    let _output = std::process::Command::new("cmake")
-        .args(["--build", build_dir.to_str().unwrap()])
-        .status()
-        .expect("Failed to build the CMake project");
-
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/lib.rs");
-    println!("cargo:rerun-if-changed=cpp/wrapper.cc");
-    println!("cargo:rerun-if-changed=cpp/wrapper.h");
-    println!("cargo:rerun-if-changed=cpp/trace_categories.cc");
-    println!("cargo:rerun-if-changed=cpp/trace_categories.h");
-    println!("cargo:rerun-if-changed=Cargo.lock");
+    println!("cargo::rerun-if-changed=build.rs");
+    println!("cargo::rerun-if-changed=cpp");
     if let Ok(file_name) = env::var("PERFETTO_INTERFACE_FILE") {
-        println!("cargo:rerun-if-changed={}", file_name);
+        println!("cargo::rerun-if-changed={}", file_name);
     }
     println!("cargo::rerun-if-env-changed=PERFETTO_INTERFACE_FILE");
-    println!(
-        "cargo:rustc-link-search=native={}/build",
-        build_dir.display()
-    );
-    println!("cargo:rustc-link-lib=dylib=stdc++");
-    println!("cargo:rustc-link-lib=static=perfetto");
-    println!("cargo:rustc-link-lib=static=perfettoWrapper");
+
+    let gen_paths = generate_interface();
+
+    cc::Build::new()
+        .cpp(true)
+        .file("cpp/wrapper.cc")
+        .file("cpp/trace_categories.cc")
+        .file("cpp/perfetto/sdk/perfetto.cc")
+        .file(gen_paths.wrappers_source_path)
+        .include("cpp")
+        .include("cpp/perfetto/sdk")
+        .include(gen_paths.cpp_header_dir)
+        .compile("perfettoWrapper");
 }

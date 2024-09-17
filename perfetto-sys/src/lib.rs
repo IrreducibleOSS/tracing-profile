@@ -10,7 +10,6 @@ use std::{
 extern "C" {
     fn init_perfetto(backend: u32, output_path: *const i8, buffer_size: usize) -> *mut c_void;
     fn deinit_perfetto(guard: *mut c_void);
-    fn is_category_enabled(category: *const c_char) -> bool;
 }
 
 // Safety: the pointers here are heap allocated and not shared. should be ok to send them to other threads
@@ -88,14 +87,6 @@ impl Drop for TraceEvent {
     }
 }
 
-/// This function is useful for troubleshooting a perfetto configuration. It should not require a connection to the tracing service, even though
-/// init_perfetto() (in the c++ code) does that as well.
-pub fn category_enabled(category: &str) -> bool {
-    let c_str = CString::new(category).unwrap();
-    let c_ptr = c_str.as_ptr() as *const c_char;
-    unsafe { is_category_enabled(c_ptr) }
-}
-
 pub enum CounterValue {
     Int32(i32),
     Float(f32),
@@ -137,15 +128,11 @@ mod tests {
 
     #[test]
     fn test_backend() {
-        assert!(!category_enabled("zkp"));
         let _guard = PerfettoGuard::new(Backend::System, None, 10);
-        assert!(category_enabled("zkp"));
     }
 
     #[test]
     fn test_in_process() {
-        assert!(!category_enabled("zkp"));
         let _guard = PerfettoGuard::new(Backend::InProcess, None, 10);
-        assert!(category_enabled("zkp"));
     }
 }

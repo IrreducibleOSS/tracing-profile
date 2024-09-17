@@ -1,6 +1,6 @@
 [package]
 name = "tracing-profile-perfetto-sys"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 description = "Low-level bindings to Perfetto, optionally used by the tracing-profile crate"
 keywords = ["profiling", "tracing", "perfetto"]
@@ -25,7 +25,7 @@ include = [
 [dependencies]
 
 [build-dependencies]
-cmake = "0.1"
+cc = "1.1.19"
 convert_case = "0.6.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
