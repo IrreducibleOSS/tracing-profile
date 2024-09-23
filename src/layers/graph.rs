@@ -320,7 +320,7 @@ struct GraphNode {
     name: String,
     id: u64,
     execution_duration: std::time::Duration,
-    metadata: BTreeMap<String, String>,
+    metadata: BTreeMap<&'static str, String>,
     events: EventCounts,
     call_count: usize,
 }

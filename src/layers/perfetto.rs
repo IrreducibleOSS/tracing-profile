@@ -1,5 +1,4 @@
-use perfetto_sys::{CounterCategory, CounterValue, EventCategory, PerfettoGuard};
-use std::fmt::{self, Debug};
+use perfetto_sys::{BackendConfig, EventData, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
     span,
@@ -8,91 +7,155 @@ use tracing::{
 use crate::data::{with_span_storage_mut, PerfettoMetadata};
 use crate::err_msg;
 
+enum CounterValue {
+    Int(u64),
+    Float(f64),
+}
+
 // gets the needed data out of an Event by implementing the Visit trait
 #[derive(Default)]
 struct CounterVisitor {
     value: Option<CounterValue>,
+    unit: Option<String>,
+    category: Option<String>,
     is_counter: bool,
+    is_incremental: bool,
 }
+
+const PEFRETTO_COUNTER_VALUE_FIELD: &str = "value";
+const PEFRETTO_IS_COUNTER_FIELD: &str = "counter";
+const PEFRETTO_IS_INCREMENTAL_FIELD: &str = "incremental";
+const PERFETTO_CATEGORY_FIELD: &str = "perfetto_category";
+const PERFETTO_UNIT_FIELD: &str = "unit";
+const PERFETTO_TRACK_ID_FIELD: &str = "perfetto_track_id";
+const PERFETTO_FLOW_ID_FIELD: &str = "perfetto_flow_id";
 
 impl Visit for CounterVisitor {
     fn record_u64(&mut self, field: &Field, value: u64) {
-        if field.name() == "value" {
-            self.value.replace(CounterValue::Int32(value as i32));
+        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
+            self.value.replace(CounterValue::Int(value));
         }
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        if field.name() == "value" {
-            self.value.replace(CounterValue::Int32(value as i32));
+        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
+            self.value.replace(CounterValue::Int(value as _));
         }
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
-        if field.name() == "value" {
+        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
             self.value.replace(CounterValue::Float(value as _));
         }
     }
 
     fn record_bool(&mut self, field: &Field, value: bool) {
-        if field.name() == "counter" {
-            self.is_counter = value;
+        match field.name() {
+            PEFRETTO_IS_COUNTER_FIELD => self.is_counter = value,
+            PEFRETTO_IS_INCREMENTAL_FIELD => self.is_incremental = value,
+            _ => {}
         }
     }
 
-    fn record_debug(&mut self, _: &Field, _: &dyn fmt::Debug) {}
+    fn record_str(&mut self, field: &Field, value: &str) {
+        match field.name() {
+            PERFETTO_CATEGORY_FIELD => {
+                self.category.replace(value.to_string());
+            }
+            PERFETTO_UNIT_FIELD => {
+                self.unit.replace(value.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    fn record_debug(&mut self, _: &Field, _: &dyn std::fmt::Debug) {}
 }
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {
-    pub default_span_category: EventCategory,
-    pub default_counter_category: CounterCategory,
     pub trace_file_path: Option<String>,
     pub buffer_size_kb: Option<usize>,
 }
 
-struct CategoryVisitor<Category> {
-    category: Option<Category>,
-}
+struct SpanVisitor<'a>(&'a mut EventData);
 
-impl<Category> Default for CategoryVisitor<Category> {
-    fn default() -> Self {
-        Self { category: None }
-    }
-}
-
-impl<Category> Visit for CategoryVisitor<Category>
-where
-    for<'a> Category: TryFrom<&'a str, Error: Debug>,
-{
+impl<'a> Visit for SpanVisitor<'a> {
     fn record_str(&mut self, field: &Field, value: &str) {
-        if field.name() == "category" {
-            self.category
-                .replace(Category::try_from(value).expect("invalid category"));
+        match field.name() {
+            PERFETTO_CATEGORY_FIELD => self.0.set_category(value),
+            field_name => {
+                self.0.add_string_arg(field_name, value);
+            }
         }
     }
 
-    fn record_bool(&mut self, _: &Field, _: bool) {}
-    fn record_debug(&mut self, _: &Field, _: &dyn fmt::Debug) {}
-    fn record_u64(&mut self, _: &Field, _: u64) {}
-    fn record_i64(&mut self, _: &Field, _: i64) {}
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        match field.name() {
+            PERFETTO_TRACK_ID_FIELD => self.0.set_track_id(value),
+            PERFETTO_FLOW_ID_FIELD => self.0.set_flow_id(value),
+            field_name => {
+                self.0.add_u64_field(field_name, value);
+            }
+        }
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        match field.name() {
+            PERFETTO_TRACK_ID_FIELD => self.0.set_track_id(value as _),
+            PERFETTO_FLOW_ID_FIELD => self.0.set_flow_id(value as _),
+            field_name => {
+                self.0.add_i64_field(field_name, value);
+            }
+        }
+    }
+
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        self.0.add_f64_field(field.name(), value);
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.0.add_bool_field(field.name(), value);
+    }
+
+    fn record_debug(&mut self, _: &Field, _: &dyn std::fmt::Debug) {}
 }
 
-pub struct Layer {
-    settings: PerfettoSettings,
-}
+/// Perfetto layer for tracing.
+pub struct Layer {}
 
 impl Layer {
-    pub fn new(
-        backend: crate::PerfettoBackend,
-        settings: PerfettoSettings,
-    ) -> (Self, PerfettoGuard) {
-        let guard = PerfettoGuard::new(
-            backend,
-            settings.trace_file_path.as_deref(),
-            settings.buffer_size_kb.clone().unwrap_or(50 * 1024),
-        );
-        (Self { settings }, guard)
+    /// Create a new layer with the settings from the environment.
+    /// The following environment variables are used:
+    /// - `PERFETTO_TRACE_FILE_PATH`: path to the output trace file. Default: `tracing.perfetto-trace`
+    /// - `PERFETTO_FUSE`: if set, the system backend will be used. Otherwise the in-process backend will be used.
+    /// - `PERFETTO_BIN_PATH`: path to the perfetto binaries. If not set, the system path will be used. Is used only with the system backend.
+    /// - `PERFETTO_CFG_PATH`: path to the perfetto config file. If not set, the default one `config/system_profiling.cfg` will be used. Is used only with the system backend.
+    /// - `PERFETTO_BUFFER_SIZE_KB`: size of the buffer in kilobytes. Default: 50 * 1024. Is used only with the in-process backend.
+    pub fn new_from_env() -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
+        let trace_file_patch = match std::env::var("PERFETTO_TRACE_FILE_PATH") {
+            Ok(path) => path,
+            Err(_) => "tracing.perfetto-trace".to_string(),
+        };
+
+        let backend = match std::env::var("PERFETTO_FUSE") {
+            Ok(_) => BackendConfig::System {
+                perfetto_bin_path: std::env::var("PERFETTO_BIN_PATH").ok(),
+                perfetto_cfg_path: std::env::var("PERFETTO_CFG_PATH").ok(),
+            },
+            Err(_) => {
+                const DEFAULT_BUFFER_SIZE_KB: usize = 50 * 1024;
+                let buffer_size_kb = match std::env::var("PERFETTO_BUFFER_SIZE_KB") {
+                    Ok(size) => size.parse().unwrap_or(DEFAULT_BUFFER_SIZE_KB),
+                    Err(_) => DEFAULT_BUFFER_SIZE_KB,
+                };
+
+                BackendConfig::InProcess { buffer_size_kb }
+            }
+        };
+
+        let guard = PerfettoGuard::new(backend, &trace_file_patch)?;
+        Ok((Self {}, guard))
     }
 }
 
@@ -115,21 +178,31 @@ where
             return;
         }
 
-        let Some(value) = data.value else {
-            err_msg!(
-                "invalid event(missing either 'name' or 'value'): {:?}",
-                event
-            );
-            return;
+        match data.value {
+            Some(CounterValue::Int(value)) => {
+                perfetto_sys::set_counter_u64(
+                    event.metadata().name(),
+                    data.unit.as_ref().map(String::as_str),
+                    data.is_incremental,
+                    value,
+                );
+            }
+            Some(CounterValue::Float(value)) => {
+                perfetto_sys::set_counter_f64(
+                    event.metadata().name(),
+                    data.unit.as_ref().map(String::as_str),
+                    data.is_incremental,
+                    value,
+                );
+            }
+            None => {
+                err_msg!(
+                    "invalid event(missing either 'name' or 'value'): {:?}",
+                    event
+                );
+                return;
+            }
         };
-
-        let mut visitor = CategoryVisitor::default();
-        event.record(&mut visitor);
-        let category = visitor
-            .category
-            .unwrap_or(self.settings.default_counter_category);
-
-        perfetto_sys::update_counter(category, event.metadata().name(), value);
     }
 
     fn on_record(
@@ -148,13 +221,12 @@ where
     ) {
         match ctx.span(id) {
             Some(span) => {
-                let mut visitor = CategoryVisitor::default();
-                attrs.record(&mut visitor);
-                let category = visitor
-                    .category
-                    .unwrap_or(self.settings.default_span_category);
+                let mut event_data = EventData::new(span.name());
 
-                let storage = PerfettoMetadata::new(span.name(), category);
+                let mut visitor = SpanVisitor(&mut event_data);
+                attrs.record(&mut visitor);
+
+                let storage = PerfettoMetadata::new(event_data);
                 let mut extensions = span.extensions_mut();
                 extensions.insert(storage);
             }

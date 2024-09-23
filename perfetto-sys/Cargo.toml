@@ -23,9 +23,9 @@ include = [
 ]
 
 [dependencies]
+libc = "0.2.158"
+tempfile = "3.12.0"
+thiserror = "1.0.63"
 
 [build-dependencies]
 cc = "1.1.19"
-convert_case = "0.6.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"

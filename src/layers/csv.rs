@@ -226,7 +226,7 @@ struct LogRow {
     start_ns: u64,
     elapsed_ns: u64,
     cpu_ns: u64,
-    fields: BTreeMap<String, String>,
+    fields: BTreeMap<&'static str, String>,
 }
 
 impl LogRow {

@@ -9,7 +9,7 @@
 //!     `CsvLayer`: logs data in CSV format
 //!     `PrintTreeLayer`: prints a call graph
 //!     `PrintPerfCountersLayer`: prints aggregated performance counters for each span.
-//!     `PerfettoLayer`: Connects to a system-wide perfetto logging service which will create a fused trace. Be warned - the program will block until a connection is established with perfetto's traced service.
+//!     `PerfettoLayer`: uses a local or system-wide perfetto tracing service to record data.
 //!     `IttApiLayer`: logs data in Intel's [ITT API](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html)
 //!
 //! ```
@@ -95,24 +95,21 @@ mod layers;
 pub use layers::ittapi::Layer as IttApiLayer;
 #[cfg(feature = "perf_counters")]
 pub use layers::print_perf_counters::Layer as PrintPerfCountersLayer;
-#[cfg(feature = "perf_counters")]
-pub use { perf_event::events::Event as PerfEvent,
-    perf_event::events::Hardware as PerfHardwareEvent,
-    perf_event::events::Software as PerfSoftwareEvent,
-    perf_event::events::Cache as PerfCacheEvent,
-};
 pub use layers::{
     csv::Layer as CsvLayer,
     graph::{Config as PrintTreeConfig, Layer as PrintTreeLayer},
+};
+#[cfg(feature = "perf_counters")]
+pub use {
+    perf_event::events::Cache as PerfCacheEvent, perf_event::events::Event as PerfEvent,
+    perf_event::events::Hardware as PerfHardwareEvent,
+    perf_event::events::Software as PerfSoftwareEvent,
 };
 
 #[cfg(feature = "perfetto")]
 pub use layers::perfetto::{Layer as PerfettoLayer, PerfettoSettings as PerfettoCategorySettings};
 #[cfg(feature = "perfetto")]
-pub use perfetto_sys::{
-    Backend as PerfettoBackend, CounterCategory as PerfettoCounterCategory,
-    EventCategory as PerfettoEventCategory, PerfettoGuard,
-};
+pub use perfetto_sys::PerfettoGuard;
 
 // use this instead of eprintln!
 macro_rules! err_msg {
@@ -126,6 +123,9 @@ pub(crate) use err_msg;
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+    use std::time::Duration;
+
     use cfg_if::cfg_if;
     use tracing::{debug_span, event, Level};
     use tracing_subscriber::layer::SubscriberExt;
@@ -137,26 +137,38 @@ mod tests {
     fn make_spans() {
         let span = debug_span!("root span");
         let _scope1 = span.enter();
+        thread::sleep(Duration::from_millis(20));
 
         // child spans 1 and 2 are siblings
-        let span2 = debug_span!("child span1", field1 = "value1");
+        let span2 = debug_span!("child span1", field1 = "value1", perfetto_track_id = 5);
         let scope2 = span2.enter();
+        thread::sleep(Duration::from_millis(20));
         drop(scope2);
 
-        let span3 = debug_span!("child span2", field2 = "value2", counter = true, value = 20);
+        let span3 = debug_span!(
+            "child span2",
+            field2 = "value2",
+            value = 20,
+            perfetto_track_id = 5,
+            perfetto_flow_id = 10
+        );
         let _scope3 = span3.enter();
 
+        thread::sleep(Duration::from_millis(20));
         event!(name: "event in span2", Level::DEBUG, {value = 100});
 
         // child spans 3 and 4 are siblings
         let span = debug_span!("child span3", field3 = "value3");
         let scope = span.enter();
-        event!(name: "event in span3", Level::DEBUG, {field5 = "value5", counter = true, value = 30});
-        event!(name: "event in span3", Level::DEBUG, {field5 = "value5", counter = true, value = 40});
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 30});
         drop(scope);
 
-        let span = debug_span!("child span4", field4 = "value4");
+        let span = debug_span!("child span4", field4 = "value4", perfetto_flow_id = 10);
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 40});
         let scope = span.enter();
+        thread::sleep(Duration::from_millis(20));
         drop(scope);
     }
 
@@ -212,15 +224,7 @@ mod tests {
     where
         S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
     {
-        let (layer, guard) = PerfettoLayer::new(
-            PerfettoBackend::InProcess,
-            layers::perfetto::PerfettoSettings {
-                default_counter_category: perfetto_sys::CounterCategory::Default,
-                default_span_category: perfetto_sys::EventCategory::Default,
-                trace_file_path: None,
-                buffer_size_kb: None,
-            },
-        );
+        let (layer, guard) = PerfettoLayer::new_from_env().unwrap();
 
         (subscriber.with(layer), guard)
     }

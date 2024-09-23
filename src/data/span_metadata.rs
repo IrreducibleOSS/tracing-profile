@@ -8,29 +8,30 @@ pub struct CsvMetadata {
     pub start_time: Option<u64>,
     pub cpu_start_time: Option<TimeSpec>,
     pub rayon_ns: u64,
-    pub fields: BTreeMap<String, String>,
+    pub fields: BTreeMap<&'static str, String>,
 }
 
-#[derive(Debug)]
 #[cfg(feature = "perfetto")]
 pub struct PerfettoMetadata {
-    label: &'static str,
-    category: perfetto_sys::EventCategory,
+    event_data: Option<perfetto_sys::EventData>,
     trace_guard: Option<perfetto_sys::TraceEvent>,
 }
 
 #[cfg(feature = "perfetto")]
 impl PerfettoMetadata {
-    pub fn new(label: &'static str, category: perfetto_sys::EventCategory) -> Self {
+    pub fn new(event_data: perfetto_sys::EventData) -> Self {
         Self {
-            label,
-            category,
+            event_data: Some(event_data),
             trace_guard: None,
         }
     }
 
     pub fn start(&mut self) {
-        self.trace_guard = Some(perfetto_sys::TraceEvent::new(&self.label, self.category));
+        self.trace_guard = Some(perfetto_sys::TraceEvent::new(
+            self.event_data
+                .take()
+                .expect("start cannot be called more than once"),
+        ));
     }
 
     pub fn end(&mut self) {
@@ -41,6 +42,6 @@ impl PerfettoMetadata {
 #[derive(Debug)]
 pub struct GraphMetadata {
     pub start_time: Option<Instant>,
-    pub fields: BTreeMap<String, String>,
+    pub fields: BTreeMap<&'static str, String>,
     pub event_counts: EventCounts,
 }
