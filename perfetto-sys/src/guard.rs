@@ -1,8 +1,8 @@
-use std::{ffi::{c_void, CString}, io::Write, path::{Path, PathBuf}, process::{Child, Command}, thread, time::Duration};
+use std::{ffi::{c_char, c_void, CString}, io::Write, path::{Path, PathBuf}, process::{Child, Command}, thread, time::Duration};
 use crate::Error;
 
 extern "C" {
-    fn init_perfetto(backend: u32, output_path: *const i8, buffer_size: usize) -> *mut c_void;
+    fn init_perfetto(backend: u32, output_path: *const c_char, buffer_size: usize) -> *mut c_void;
     fn deinit_perfetto(guard: *mut c_void);
 }
 

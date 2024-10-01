@@ -85,6 +85,10 @@ The `Perfetto` layer
  - for each tracing span span creates a single Perfetto event with the same lifetime
  - for each event that has `counter` property set to true updates the corresponding Perfetto counter value using the `value` property of the event.
 
+See the documentation to the `PerfettoLayer` struct for more details.
+
+_Perfetto is supported only if the target OS is Linux._
+
 ### Example Test
 
 ```rust

@@ -122,6 +122,23 @@ impl<'a> Visit for SpanVisitor<'a> {
 }
 
 /// Perfetto layer for tracing.
+///
+/// The layer support two types of entities:
+/// - spans are converted into perfetto events. The following special fields are supported:
+///   - `perfetto_category`: category of the event. If not specified "default" will be used.
+///   - `perfetto_track_id`: track id of the event. See perfetto documentation for more details.
+///   - `perfetto_flow_id`: flow id of the event. See perfetto documentation for more details.
+/// - events with `counter` field are converted into perfetto counters. The following special fields are supported:
+///  - `value`: value of the counter, integer or double. Required.
+///  - `unit`: unit of the counter. Optional.
+///  - `incremental`: if set to true, the counter will be treated as incremental. Optional.
+///
+/// ```ignore
+/// // At the beginning of the program
+/// (layer, guard) = PerfettoLayer::new_from_env().unwrap();
+///
+/// // guard should be kept alive for the duration of the program
+/// ```
 pub struct Layer {}
 
 impl Layer {
