@@ -2,6 +2,7 @@
 version = "0.9.0"
 edition = "2021"
 name = "tracing-profile"
+authors = ["Irreducible Team <opensource@irreducible.com>"]
 description = "A span based profiler, utilizing the tracing crate"
 keywords = ["metrics", "profiling", "tracing"]
 license = "Apache-2.0"

@@ -3,23 +3,6 @@ use tracing_subscriber::registry::LookupSpan;
 
 use crate::errors::err_msg;
 
-/// Register storage of the given type with the span.
-pub fn insert_to_span_storage<T, S>(
-    id: &span::Id,
-    ctx: tracing_subscriber::layer::Context<'_, S>,
-    storage: T,
-) where
-    T: 'static + Send + Sync,
-    S: tracing::Subscriber,
-    for<'lookup> S: LookupSpan<'lookup>,
-{
-    let Some(span) = ctx.span(id) else {
-        return err_msg!("failed to get span");
-    };
-
-    span.extensions_mut().insert(storage);
-}
-
 /// Perform operation with mutable span storage value.
 pub fn with_span_storage_mut<T, S>(
     id: &span::Id,

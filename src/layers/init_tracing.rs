@@ -13,7 +13,6 @@ use tracing_subscriber::{
     Layer,
 };
 
-use crate::data::GuardWrapper;
 use crate::{CsvLayer, PrintTreeConfig, PrintTreeLayer};
 
 trait WithEnvFilter<S: Subscriber>: Layer<S> + Sized {
