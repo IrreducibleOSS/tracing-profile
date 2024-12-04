@@ -66,12 +66,7 @@ struct CpuTimeEvent {
 impl Visit for CpuTimeEvent {
     fn record_u64(&mut self, field: &Field, value: u64) {
         let field_name = field.name();
-        match self.map.get_mut(field_name) {
-            Some(v) => *v += value,
-            None => {
-                self.map.insert(field_name, value);
-            }
-        }
+        *self.map.entry(field_name).or_insert(0) += value;
     }
 
     fn record_str(&mut self, _: &Field, _: &str) {}
