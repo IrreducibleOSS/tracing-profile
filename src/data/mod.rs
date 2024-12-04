@@ -1,14 +1,19 @@
 mod event_counts;
 mod field_visitor;
+mod guard_wrapper;
 mod log_tree;
 mod span_metadata;
 mod storage_utils;
 
-pub use event_counts::EventCounts;
+pub(crate) use event_counts::EventCounts;
 #[allow(unused_imports)]
 pub use field_visitor::{StoringFieldVisitor, WritingFieldVisitor};
+#[allow(unused_imports)]
+pub(super) use guard_wrapper::GuardWrapper;
 pub use log_tree::LogTree;
 pub use span_metadata::*;
+#[cfg(feature = "ittapi")]
+pub use storage_utils::insert_to_span_storage;
 #[cfg(feature = "perf_counters")]
 pub use storage_utils::with_span_storage;
-pub use storage_utils::{insert_to_span_storage, with_span_storage_mut};
+pub use storage_utils::with_span_storage_mut;

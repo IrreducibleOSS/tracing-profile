@@ -1,5 +1,6 @@
 pub mod csv;
 pub mod graph;
+pub mod init_tracing;
 
 #[cfg(feature = "perfetto")]
 pub mod perfetto;

@@ -1,6 +1,4 @@
-use std::{collections::BTreeMap, time::Instant};
-
-use super::EventCounts;
+use linear_map::LinearMap;
 use nix::sys::time::TimeSpec;
 
 #[derive(Debug)]
@@ -8,7 +6,7 @@ pub struct CsvMetadata {
     pub start_time: Option<u64>,
     pub cpu_start_time: Option<TimeSpec>,
     pub rayon_ns: u64,
-    pub fields: BTreeMap<&'static str, String>,
+    pub fields: LinearMap<&'static str, String>,
 }
 
 #[cfg(feature = "perfetto")]
@@ -37,11 +35,4 @@ impl PerfettoMetadata {
     pub fn end(&mut self) {
         self.trace_guard = None;
     }
-}
-
-#[derive(Debug)]
-pub struct GraphMetadata {
-    pub start_time: Option<Instant>,
-    pub fields: BTreeMap<&'static str, String>,
-    pub event_counts: EventCounts,
 }

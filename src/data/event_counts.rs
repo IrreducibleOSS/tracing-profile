@@ -1,14 +1,15 @@
 // Copyright 2024 Ulvetanna Inc.
 
 use super::WritingFieldVisitor;
+use linear_map::LinearMap;
 use std::fmt::Write;
 use std::mem::take;
-use std::{borrow::Cow, collections::HashMap, ops::AddAssign};
+use std::{borrow::Cow, ops::AddAssign};
 
 /// Number of events met during the span's lifetime.
 #[derive(Default, Debug, Clone)]
-pub struct EventCounts {
-    events: HashMap<Cow<'static, str>, usize>,
+pub(crate) struct EventCounts {
+    events: LinearMap<Cow<'static, str>, usize>,
     buffer: String,
 }
 
@@ -17,10 +18,8 @@ impl EventCounts {
     pub fn record(&mut self, event: &tracing::Event<'_>) {
         if !event.fields().any(|_| true) {
             // If no fields we can just use the event name as a key.
-            *self
-                .events
-                .entry(Cow::Borrowed(event.metadata().name()))
-                .or_default() += 1;
+            let name = Cow::Borrowed(event.metadata().name());
+            *self.events.entry(name).or_insert(0) += 1;
         } else {
             // If events are generating frequently in most of the cases we will be incrementing the counter
             // for already allocated string key. So, we can reuse the buffer and avoid reallocation.
@@ -31,13 +30,17 @@ impl EventCounts {
             write!(&mut self.buffer, " }}").unwrap();
 
             let key = Cow::Owned(take(&mut self.buffer));
-            if let Some(count) = self.events.get_mut(&key) {
-                *count += 1;
-                self.buffer = key.into_owned();
-            } else {
-                self.events.insert(key, 1);
-            }
+            *self.events.entry(key).or_insert(0) += 1;
         };
+    }
+
+    pub fn increment_counter<'a>(&mut self, name: &'a str) {
+        match self.events.get_mut(name) {
+            Some(value) => *value += 1,
+            None => {
+                self.events.insert(name.to_string().into(), 1);
+            }
+        }
     }
 
     /// Check if there are no events recorded.
@@ -61,7 +64,12 @@ impl EventCounts {
 impl AddAssign<&EventCounts> for EventCounts {
     fn add_assign(&mut self, rhs: &EventCounts) {
         for (name, count) in &rhs.events {
-            *self.events.entry(name.clone()).or_default() += count;
+            match self.events.get_mut(name) {
+                Some(value) => *value += count,
+                None => {
+                    self.events.insert(name.clone(), *count);
+                }
+            }
         }
     }
 }

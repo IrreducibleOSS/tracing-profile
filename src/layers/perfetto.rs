@@ -1,3 +1,5 @@
+// Copyright 2024 Irreducible Inc.
+
 use perfetto_sys::{BackendConfig, EventData, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
@@ -5,7 +7,7 @@ use tracing::{
 };
 
 use crate::data::{with_span_storage_mut, PerfettoMetadata};
-use crate::err_msg;
+use crate::errors::err_msg;
 
 enum CounterValue {
     Int(u64),

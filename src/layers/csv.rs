@@ -1,18 +1,18 @@
+use linear_map::LinearMap;
 use nix::sys::time::TimeValLike;
 use nix::time::{clock_gettime, ClockId};
-use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc;
-use std::{collections::BTreeMap, time::Instant};
+use std::time::Instant;
 use tracing::{
     field::{Field, Visit},
     span,
 };
 
 use crate::data::{with_span_storage_mut, CsvMetadata, StoringFieldVisitor};
-use crate::err_msg;
+use crate::errors::err_msg;
 
 /// CsvLayer (internally called layer::csv)  
 /// This Layer emits logs in CSV format, allowing for fine grained analysis.
@@ -60,12 +60,18 @@ use crate::err_msg;
 
 #[derive(Default)]
 struct CpuTimeEvent {
-    map: HashMap<String, u64>,
+    map: LinearMap<&'static str, u64>,
 }
 
 impl Visit for CpuTimeEvent {
     fn record_u64(&mut self, field: &Field, value: u64) {
-        *self.map.entry(field.name().to_string()).or_insert(0) += value;
+        let field_name = field.name();
+        match self.map.get_mut(field_name) {
+            Some(v) => *v += value,
+            None => {
+                self.map.insert(field_name, value);
+            }
+        }
     }
 
     fn record_str(&mut self, _: &Field, _: &str) {}
@@ -208,7 +214,7 @@ where
             start_time: None,
             cpu_start_time: None,
             rayon_ns: 0,
-            fields: BTreeMap::new(),
+            fields: LinearMap::new(),
         };
 
         // warning: the library user must use #[instrument(skip_all)] or else too much data will be logged
@@ -226,7 +232,7 @@ struct LogRow {
     start_ns: u64,
     elapsed_ns: u64,
     cpu_ns: u64,
-    fields: BTreeMap<&'static str, String>,
+    fields: LinearMap<&'static str, String>,
 }
 
 impl LogRow {

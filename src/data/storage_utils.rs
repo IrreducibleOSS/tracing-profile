@@ -1,7 +1,7 @@
 use tracing::span;
 use tracing_subscriber::registry::LookupSpan;
 
-use crate::err_msg;
+use crate::errors::err_msg;
 
 /// Register storage of the given type with the span.
 pub fn insert_to_span_storage<T, S>(

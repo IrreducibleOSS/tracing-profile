@@ -11,14 +11,15 @@
 //!     `PrintPerfCountersLayer`: prints aggregated performance counters for each span.
 //!     `PerfettoLayer`: uses a local or system-wide perfetto tracing service to record data.
 //!     `IttApiLayer`: logs data in Intel's [ITT API](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html)
+//!     `TracyLayer`: re-exports the `tracing_tracy::TracyLayer`.
+//!
+//! `init_tracing` is a convenience function that initializes the tracing with the default values
+//! depending on the features enabled and environment variables set.
 //!
 //! ```
 //! use tracing::instrument;
 //! use tracing::debug_span;
-//! use tracing_subscriber::layer::SubscriberExt;
-//! use tracing_subscriber::prelude::*;
-//! use tracing_subscriber::registry::LookupSpan;
-//! use tracing_profile::*;
+//! use tracing_profile::init_tracing;
 //!
 //! #[instrument(skip_all, name= "graph_root", fields(a="b", c="d"))]
 //! fn entry_point() {
@@ -30,55 +31,11 @@
 //! }
 //!
 //! fn main() {
-//!     let layer = tracing_subscriber::registry()
-//!         .with(PrintTreeLayer::default())
-//!         .with(CsvLayer::new("/tmp/output.csv"));
-//!     let layer = with_perf_counters(layer);
-//!     let layer = with_ittapi(layer);
+//!     // Initialize the tracing with the default values
+//!     // Note that the guard must be kept alive for the duration of the program.
+//!     let _guard = init_tracing().unwrap();
 //!     
 //!     entry_point();
-//! }
-//!
-//!  #[cfg(not(feature = "perf_counters"))]
-//! fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-//! where
-//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-//! {
-//!     subscriber
-//! }
-//!
-//! #[cfg(feature = "perf_counters")]
-//! fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-//! where
-//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-//! {
-//!     use perf_event::events::Hardware;
-//!
-//!     subscriber.with(
-//!         PrintPerfCountersLayer::new(vec![
-//!             ("instructions".to_string(), Hardware::INSTRUCTIONS.into()),
-//!             ("cycles".to_string(), Hardware::CPU_CYCLES.into()),
-//!         ])
-//!         .unwrap(),
-//!     )
-//! }
-//!
-//! #[cfg(not(feature = "ittapi"))]
-//! fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-//! where
-//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-//! {
-//!     subscriber
-//! }
-//!
-//! #[cfg(feature = "ittapi")]
-//! fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-//! where
-//!     S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-//! {
-//!     subscriber.with(
-//!         IttApiLayer::default(),
-//!     )
 //! }
 //! ```
 //!
@@ -89,6 +46,8 @@
 //! The `panic` feature will turn eprintln! into panic!, causing the program to halt on errors.
 
 mod data;
+mod env_utils;
+mod errors;
 mod layers;
 
 #[cfg(feature = "ittapi")]
@@ -111,26 +70,17 @@ pub use layers::perfetto::{Layer as PerfettoLayer, PerfettoSettings as PerfettoC
 #[cfg(feature = "perfetto")]
 pub use perfetto_sys::PerfettoGuard;
 
-// use this instead of eprintln!
-macro_rules! err_msg {
-    ($($arg:tt)*) => {{
-        eprintln!($($arg)*);
-        assert!(cfg!(not(feature = "panic")))
-    }};
-}
+#[cfg(feature = "tracy")]
+pub use tracing_tracy::TracyLayer;
 
-pub(crate) use err_msg;
+pub use layers::init_tracing::init_tracing;
 
 #[cfg(test)]
 mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use cfg_if::cfg_if;
     use tracing::{debug_span, event, Level};
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::prelude::*;
-    use tracing_subscriber::registry::LookupSpan;
 
     use super::*;
 
@@ -164,6 +114,13 @@ mod tests {
         event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 30});
         drop(scope);
 
+        thread::spawn(|| {
+            let span = debug_span!("child span5", field5 = "value5");
+            let _scope = span.enter();
+            thread::sleep(Duration::from_millis(20));
+            event!(name: "custom event", Level::DEBUG, {field5 = "value6", counter = true, value = 10});
+        }).join().unwrap();
+
         let span = debug_span!("child span4", field4 = "value4", perfetto_flow_id = 10);
         thread::sleep(Duration::from_millis(20));
         event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 40});
@@ -172,72 +129,10 @@ mod tests {
         drop(scope);
     }
 
-    fn with_perf_counters<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        cfg_if! {
-            if #[cfg(feature = "perf_counters")] {
-                subscriber.with(
-                    PrintPerfCountersLayer::new(vec![
-                        ("instructions".to_string(), PerfHardwareEvent::INSTRUCTIONS.into()),
-                        ("cycles".to_string(), PerfHardwareEvent::CPU_CYCLES.into()),
-                    ])
-                    .unwrap(),
-                )
-            } else {
-                subscriber
-            }
-        }
-    }
-
-    fn with_ittapi<S>(subscriber: S) -> impl SubscriberExt + for<'lookup> LookupSpan<'lookup>
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        cfg_if! {
-            if #[cfg(feature = "ittapi")] {
-                subscriber.with(IttApiLayer::default())
-            } else {
-                subscriber
-            }
-        }
-    }
-
-    #[cfg(not(feature = "perfetto"))]
-    fn with_perfetto<S>(
-        subscriber: S,
-    ) -> (impl SubscriberExt + for<'lookup> LookupSpan<'lookup>, ())
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        (subscriber, ())
-    }
-
-    #[cfg(feature = "perfetto")]
-    fn with_perfetto<S>(
-        subscriber: S,
-    ) -> (
-        impl SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-        PerfettoGuard,
-    )
-    where
-        S: SubscriberExt + for<'lookup> LookupSpan<'lookup>,
-    {
-        let (layer, guard) = PerfettoLayer::new_from_env().unwrap();
-
-        (subscriber.with(layer), guard)
-    }
-
     #[test]
     fn all_layers() {
-        let (subscriber, _guard) = with_perfetto(with_ittapi(with_perf_counters(
-            tracing_subscriber::registry()
-                .with(PrintTreeLayer::default())
-                .with(CsvLayer::new("/tmp/output.csv")),
-        )));
+        let _guard = init_tracing().unwrap();
 
-        subscriber.init();
         _ = make_spans();
     }
 }

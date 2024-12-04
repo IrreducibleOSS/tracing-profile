@@ -1,8 +1,9 @@
 // Copyright 2024 Ulvetanna Inc.
 
-use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
+use linear_map::LinearMap;
+use std::{borrow::Cow, fmt::Write};
 
-pub struct StoringFieldVisitor<'a>(pub &'a mut BTreeMap<&'static str, String>);
+pub struct StoringFieldVisitor<'a>(pub &'a mut LinearMap<&'static str, String>);
 
 impl<'a> tracing::field::Visit for StoringFieldVisitor<'a> {
     fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
