@@ -1,7 +1,8 @@
 [package]
 name = "tracing-profile-perfetto-sys"
-version = "0.7.1"
+version = "0.9.0"
 edition = "2021"
+authors = ["Irreducible Team <opensource@irreducible.com>"]
 description = "Low-level bindings to Perfetto, optionally used by the tracing-profile crate"
 keywords = ["profiling", "tracing", "perfetto"]
 license = "Apache-2.0"
@@ -13,7 +14,9 @@ include = [
     "README.md",
     "examples/*",
     "src/*",
+    "config/system_profiling.cfg",
     "cpp/CMakeLists.txt",
+    "cpp/trace_categories.h",
     "cpp/trace_categories.cc",
     "cpp/wrapper.h",
     "cpp/wrapper.cc",
