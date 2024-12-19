@@ -60,7 +60,7 @@ pub fn init_tracing() -> Result<impl Drop, Error> {
             if #[cfg(feature = "perfetto")] {
                 let (new_layer, new_guard) =
                     crate::PerfettoLayer::new_from_env()?;
-                (layer.with(new_layer.with_env_filter()), GuardWrapper::wrap(guard, new_guard))
+                (layer.with(new_layer.with_env_filter()), crate::data::GuardWrapper::wrap(guard, new_guard))
             } else {
                 (layer, guard)
             }
