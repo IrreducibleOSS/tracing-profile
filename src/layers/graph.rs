@@ -49,10 +49,6 @@ pub struct Config {
     /// Whether to disable color output.
     /// Corresponds to the `NO_COLOR` environment variable.
     pub no_color: bool,
-
-    /// Whether to defer printing the tree until the guard is dropped.
-    /// Corresponds to the `TREE_LAYER_DEFER_PRINT` environment variable.
-    pub defer_print: bool,
 }
 
 impl Config {
@@ -65,7 +61,6 @@ impl Config {
             accumulate_events: get_bool_env_var("TREE_LAYER_ACCUMULATE_EVENTS", true),
             accumulate_spans_count: get_bool_env_var("TREE_LAYER_ACCUMULATE_SPANS_COUNT", false),
             no_color: get_bool_env_var("NO_COLOR", false),
-            defer_print: get_bool_env_var("TREE_LAYER_DEFER_PRINT", false),
         }
     }
 }
@@ -76,29 +71,34 @@ impl Default for Config {
     }
 }
 
-pub struct Guard {
-    finished_graphs: Arc<Mutex<Vec<GraphNode>>>,
-    config: Config,
+#[derive(Default)]
+struct State {
+    current_span: Option<span::Id>,
+    unfinished_spans: LinearMap<u64, GraphNode>,
+    zero_level_events: EventCounts,
 }
 
-impl Guard {
-    fn new(finished_graphs: Arc<Mutex<Vec<GraphNode>>>, config: Config) -> Self {
-        Self {
-            finished_graphs,
-            config,
+impl State {
+    fn print_zero_level_events(&mut self) {
+        if !self.zero_level_events.is_empty() {
+            println!("{}\n", self.zero_level_events.format("\n"));
+
+            self.zero_level_events.clear();
         }
     }
 }
 
+pub struct Guard {
+    state: Arc<Mutex<State>>,
+}
+
 impl Drop for Guard {
     fn drop(&mut self) {
-        let Ok(mut finished_graphs) = self.finished_graphs.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return err_msg!("failed to get mutex");
         };
 
-        for root in finished_graphs.drain(..) {
-            root.print(&self.config);
-        }
+        state.print_zero_level_events();
     }
 }
 
@@ -133,23 +133,19 @@ impl Drop for Guard {
 /// ```
 pub struct Layer {
     main_thread: ThreadId,
-    current_span: Mutex<Option<span::Id>>,
-    unfinished_spans: Mutex<LinearMap<u64, GraphNode>>,
-    finished_graphs: Arc<Mutex<Vec<GraphNode>>>,
+    state: Arc<Mutex<State>>,
     config: Config,
 }
 
 impl Layer {
     pub fn new(config: Config) -> (Self, Guard) {
-        let finished_graphs = Arc::new(Mutex::new(vec![]));
+        let state = Arc::new(Mutex::new(State::default()));
         let layer = Self {
             main_thread: std::thread::current().id(),
-            current_span: Mutex::default(),
-            finished_graphs: finished_graphs.clone(),
-            unfinished_spans: Mutex::default(),
+            state: state.clone(),
             config: config.clone(),
         };
-        let guard = Guard::new(finished_graphs, config);
+        let guard = Guard { state };
 
         (layer, guard)
     }
@@ -182,11 +178,11 @@ where
         let mut visitor = StoringFieldVisitor(&mut graph_node.metadata);
         attrs.record(&mut visitor);
 
-        let Ok(mut unfinished_spans) = self.unfinished_spans.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return err_msg!("failed to get mutex");
         };
 
-        unfinished_spans.insert(id.into_u64(), graph_node);
+        state.unfinished_spans.insert(id.into_u64(), graph_node);
     }
 
     fn on_record(
@@ -199,11 +195,11 @@ where
             return;
         }
 
-        let Ok(mut unfinished_spans) = self.unfinished_spans.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return err_msg!("failed to get mutex");
         };
 
-        if let Some(graph_node) = unfinished_spans.get_mut(&id.into_u64()) {
+        if let Some(graph_node) = state.unfinished_spans.get_mut(&id.into_u64()) {
             let mut visitor = StoringFieldVisitor(&mut graph_node.metadata);
             values.record(&mut visitor);
         }
@@ -213,15 +209,17 @@ where
         if !self.is_main_thread() {
             return;
         }
-        *self.current_span.lock().expect("failed to lock the mutex") = Some(id.clone());
 
-        let Ok(mut unfinished_spans) = self.unfinished_spans.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return err_msg!("failed to get mutex");
         };
 
-        if let Some(graph_node) = unfinished_spans.get_mut(&id.into_u64()) {
+        state.current_span = Some(id.clone());
+        if let Some(graph_node) = state.unfinished_spans.get_mut(&id.into_u64()) {
             graph_node.started = Some(Instant::now());
         }
+
+        state.print_zero_level_events();
     }
 
     fn on_exit(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
@@ -233,11 +231,14 @@ where
             return err_msg!("failed to get span on_exit");
         };
 
-        let Ok(mut unfinished_spans) = self.unfinished_spans.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return err_msg!("failed to get mutex");
         };
 
-        let mut node = unfinished_spans.remove(&id.into_u64()).unwrap_or_default();
+        let mut node = state
+            .unfinished_spans
+            .remove(&id.into_u64())
+            .unwrap_or_default();
         node.execution_duration = node
             .started
             .map(|started| Instant::elapsed(&started))
@@ -246,7 +247,7 @@ where
 
         let parent = match span.parent() {
             Some(p) => {
-                let Some(parent_node) = unfinished_spans.get_mut(&p.id().into_u64()) else {
+                let Some(parent_node) = state.unfinished_spans.get_mut(&p.id().into_u64()) else {
                     return err_msg!("failed to get parent node");
                 };
 
@@ -254,27 +255,23 @@ where
                 Some(p.id().clone())
             }
             None => {
-                let Ok(mut finished_graphs) = self.finished_graphs.lock() else {
-                    return err_msg!("failed to get mutex");
-                };
-
-                if self.config.defer_print {
-                    finished_graphs.push(node);
-                } else {
-                    node.print(&self.config);
-                }
+                node.print(&self.config);
 
                 None
             }
         };
 
-        *self.current_span.lock().expect("failed to lock the mutex") = parent;
+        state.current_span = parent;
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
         if event.is_root() {
             return;
         }
+
+        let Ok(mut state) = self.state.lock() else {
+            return err_msg!("failed to get mutex");
+        };
 
         let span_id = if self.is_main_thread() {
             event
@@ -283,22 +280,18 @@ where
                 .or_else(|| ctx.current_span().id().cloned())
         } else {
             // try to attach the event to the latest main thread span
-            self.current_span
-                .lock()
-                .expect("failed to lock the mutex")
-                .clone()
+            state.current_span.clone()
         };
 
-        let Some(span_id) = span_id else {
-            return;
-        };
-
-        let Ok(mut unfinished_spans) = self.unfinished_spans.lock() else {
-            return err_msg!("failed to get mutex");
-        };
-
-        if let Some(graph_node) = unfinished_spans.get_mut(&span_id.into_u64()) {
-            graph_node.events.record(event);
+        match span_id {
+            Some(span_id) => {
+                if let Some(graph_node) = state.unfinished_spans.get_mut(&span_id.into_u64()) {
+                    graph_node.events.record(event);
+                }
+            }
+            None => {
+                state.zero_level_events.record(event);
+            }
         }
     }
 }

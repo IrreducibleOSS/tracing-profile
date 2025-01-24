@@ -48,6 +48,11 @@ impl EventCounts {
         self.events.is_empty()
     }
 
+    /// Clear all recorded events.
+    pub fn clear(&mut self) {
+        self.events.clear();
+    }
+
     /// Format the event counts as a string with the given separator.
     pub fn format(&self, separator: &str) -> String {
         let mut ordered_events: Vec<_> = self.events.iter().collect();
