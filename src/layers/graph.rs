@@ -335,7 +335,7 @@ impl GraphNode {
     /// Record the span node as event.
     /// Handy to calculate the number of spans of the type.
     fn record_self_as_event(&mut self) {
-        self.events.increment_counter(&self.name);
+        self.events.increment_events_counter(&self.name);
     }
 
     fn print(mut self, config: &Config) {
@@ -461,5 +461,84 @@ impl GraphNode {
         self.events += &other.events;
 
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {crate::data::CounterValue, tracing_subscriber::util::SubscriberInitExt};
+    use {
+        crate::{PrintTreeConfig, PrintTreeLayer},
+        tracing_subscriber::layer::SubscriberExt,
+    };
+    use {
+        std::{thread, time::Duration},
+        tracing::{debug_span, event, Level},
+    };
+
+    #[test]
+    fn test_incremental_events_counts() {
+        let (layer, guard) = PrintTreeLayer::new(PrintTreeConfig::default());
+        let layer = tracing_subscriber::registry().with(layer);
+        layer.try_init().unwrap();
+
+        let span = debug_span!("root span");
+        let _scope1 = span.enter();
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "proof_size", Level::INFO, counter=true, incremental=true, value=1);
+        // child spans 1 and 2 are siblings
+        let span2 = debug_span!("child span1", field1 = "value1", perfetto_track_id = 5);
+        let scope2 = span2.enter();
+        thread::sleep(Duration::from_millis(20));
+        drop(scope2);
+
+        let span3 = debug_span!(
+            "child span2",
+            field2 = "value2",
+            value = 20,
+            perfetto_track_id = 5,
+            perfetto_flow_id = 10
+        );
+        let _scope3 = span3.enter();
+
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "proof_size", Level::INFO, counter=true, incremental=true, value=3);
+
+        // child spans 3 and 4 are siblings
+        let span = debug_span!("child span3", field3 = "value3");
+        let scope = span.enter();
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 30});
+        drop(scope);
+
+        thread::spawn(|| {
+            let span = debug_span!("child span5", field5 = "value5");
+            let _scope = span.enter();
+            thread::sleep(Duration::from_millis(20));
+            event!(name: "proof_size", Level::INFO, counter=true, incremental=true, value=6);
+        })
+        .join()
+        .unwrap();
+
+        let span = debug_span!("child span4", field4 = "value4", perfetto_flow_id = 10);
+        thread::sleep(Duration::from_millis(20));
+        event!(name: "custom event", Level::DEBUG, {field5 = "value5", counter = true, value = 40});
+        let scope = span.enter();
+        thread::sleep(Duration::from_millis(20));
+        drop(scope);
+        drop(_scope3);
+
+        let mut state = guard.state.lock().unwrap();
+        let root = state.unfinished_spans.get_mut(&1).unwrap();
+
+        root.accumulate_children_events(true);
+
+        assert_eq!(
+            *root.events.get("proof_size").unwrap(),
+            CounterValue::Int(10)
+        );
+
+        // remove to avoid an incorrect graph print
+        state.unfinished_spans.remove(&1).unwrap();
     }
 }

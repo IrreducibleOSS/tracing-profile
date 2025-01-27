@@ -6,79 +6,18 @@ use tracing::{
     span,
 };
 
-use crate::data::{with_span_storage_mut, PerfettoMetadata};
+use crate::data::{with_span_storage_mut, CounterValue, CounterVisitor, PerfettoMetadata};
 use crate::errors::err_msg;
-
-enum CounterValue {
-    Int(u64),
-    Float(f64),
-}
-
-// gets the needed data out of an Event by implementing the Visit trait
-#[derive(Default)]
-struct CounterVisitor {
-    value: Option<CounterValue>,
-    unit: Option<String>,
-    category: Option<String>,
-    is_counter: bool,
-    is_incremental: bool,
-}
-
-const PEFRETTO_COUNTER_VALUE_FIELD: &str = "value";
-const PEFRETTO_IS_COUNTER_FIELD: &str = "counter";
-const PEFRETTO_IS_INCREMENTAL_FIELD: &str = "incremental";
-const PERFETTO_CATEGORY_FIELD: &str = "perfetto_category";
-const PERFETTO_UNIT_FIELD: &str = "unit";
-const PERFETTO_TRACK_ID_FIELD: &str = "perfetto_track_id";
-const PERFETTO_FLOW_ID_FIELD: &str = "perfetto_flow_id";
-
-impl Visit for CounterVisitor {
-    fn record_u64(&mut self, field: &Field, value: u64) {
-        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
-            self.value.replace(CounterValue::Int(value));
-        }
-    }
-
-    fn record_i64(&mut self, field: &Field, value: i64) {
-        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
-            self.value.replace(CounterValue::Int(value as _));
-        }
-    }
-
-    fn record_f64(&mut self, field: &Field, value: f64) {
-        if field.name() == PEFRETTO_COUNTER_VALUE_FIELD {
-            self.value.replace(CounterValue::Float(value as _));
-        }
-    }
-
-    fn record_bool(&mut self, field: &Field, value: bool) {
-        match field.name() {
-            PEFRETTO_IS_COUNTER_FIELD => self.is_counter = value,
-            PEFRETTO_IS_INCREMENTAL_FIELD => self.is_incremental = value,
-            _ => {}
-        }
-    }
-
-    fn record_str(&mut self, field: &Field, value: &str) {
-        match field.name() {
-            PERFETTO_CATEGORY_FIELD => {
-                self.category.replace(value.to_string());
-            }
-            PERFETTO_UNIT_FIELD => {
-                self.unit.replace(value.to_string());
-            }
-            _ => {}
-        }
-    }
-
-    fn record_debug(&mut self, _: &Field, _: &dyn std::fmt::Debug) {}
-}
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {
     pub trace_file_path: Option<String>,
     pub buffer_size_kb: Option<usize>,
 }
+
+const PERFETTO_CATEGORY_FIELD: &str = "perfetto_category";
+const PERFETTO_TRACK_ID_FIELD: &str = "perfetto_track_id";
+const PERFETTO_FLOW_ID_FIELD: &str = "perfetto_flow_id";
 
 struct SpanVisitor<'a>(&'a mut EventData);
 

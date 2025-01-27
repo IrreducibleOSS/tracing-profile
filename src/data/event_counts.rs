@@ -1,5 +1,8 @@
 // Copyright 2024 Ulvetanna Inc.
 
+use crate::errors::err_msg;
+
+use super::field_visitor::{CounterValue, CounterVisitor};
 use super::WritingFieldVisitor;
 use linear_map::LinearMap;
 use std::fmt::Write;
@@ -9,7 +12,7 @@ use std::{borrow::Cow, ops::AddAssign};
 /// Number of events met during the span's lifetime.
 #[derive(Default, Debug, Clone)]
 pub(crate) struct EventCounts {
-    events: LinearMap<Cow<'static, str>, usize>,
+    counters: LinearMap<Cow<'static, str>, CounterValue>,
     buffer: String,
 }
 
@@ -19,43 +22,71 @@ impl EventCounts {
         if !event.fields().any(|_| true) {
             // If no fields we can just use the event name as a key.
             let name = Cow::Borrowed(event.metadata().name());
-            *self.events.entry(name).or_insert(0) += 1;
+            match self.counters.get_mut(&name) {
+                Some(value) => *value += 1,
+                None => {
+                    self.counters.insert(name, CounterValue::Int(1));
+                }
+            }
         } else {
-            // If events are generating frequently in most of the cases we will be incrementing the counter
-            // for already allocated string key. So, we can reuse the buffer and avoid reallocation.
-            self.buffer.clear();
-            write!(&mut self.buffer, "{} {{ ", event.metadata().name()).unwrap();
-            let mut visitor = WritingFieldVisitor::new(&mut self.buffer);
-            event.record(&mut visitor);
-            write!(&mut self.buffer, " }}").unwrap();
+            let mut data = CounterVisitor::default();
+            event.record(&mut data);
 
-            let key = Cow::Owned(take(&mut self.buffer));
-            *self.events.entry(key).or_insert(0) += 1;
+            if data.is_counter {
+                match (self.counters.get_mut(event.metadata().name()), data.value) {
+                    (None, Some(new_value)) => {
+                        let name = Cow::Borrowed(event.metadata().name());
+                        self.counters.insert(name, new_value);
+                    }
+                    (Some(value), Some(new_value)) => *value += new_value,
+                    _ => {
+                        err_msg!("invalid event {:?}", event);
+                        return;
+                    }
+                };
+            } else {
+                // If events are generating frequently in most of the cases we will be incrementing the counter
+                // for already allocated string key. So, we can reuse the buffer and avoid reallocation.
+                self.buffer.clear();
+                write!(&mut self.buffer, "{} {{ ", event.metadata().name()).unwrap();
+                let mut visitor = WritingFieldVisitor::new(&mut self.buffer);
+                event.record(&mut visitor);
+                write!(&mut self.buffer, " }}").unwrap();
+
+                let key = Cow::Owned(take(&mut self.buffer));
+                match self.counters.get_mut(&key) {
+                    Some(value) => *value += 1,
+                    None => {
+                        self.counters.insert(key, CounterValue::Int(1));
+                    }
+                }
+            }
         };
     }
 
-    pub fn increment_counter<'a>(&mut self, name: &'a str) {
-        match self.events.get_mut(name) {
+    pub fn increment_events_counter<'a>(&mut self, name: &'a str) {
+        match self.counters.get_mut(name) {
             Some(value) => *value += 1,
             None => {
-                self.events.insert(name.to_string().into(), 1);
+                self.counters
+                    .insert(name.to_string().into(), CounterValue::Int(1));
             }
         }
     }
 
-    /// Check if there are no events recorded.
+    /// Check if there are no counters recorded.
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
+        self.counters.is_empty()
     }
 
     /// Clear all recorded events.
     pub fn clear(&mut self) {
-        self.events.clear();
+        self.counters.clear();
     }
 
     /// Format the event counts as a string with the given separator.
     pub fn format(&self, separator: &str) -> String {
-        let mut ordered_events: Vec<_> = self.events.iter().collect();
+        let mut ordered_events: Vec<_> = self.counters.iter().collect();
         ordered_events.sort_by_key(|(name, _)| *name);
 
         ordered_events
@@ -64,17 +95,22 @@ impl EventCounts {
             .collect::<Vec<_>>()
             .join(separator)
     }
+
+    #[cfg(test)]
+    pub fn get(&self, key: &str) -> Option<&CounterValue> {
+        self.counters.get(key)
+    }
 }
 
 impl AddAssign<&EventCounts> for EventCounts {
     fn add_assign(&mut self, rhs: &EventCounts) {
-        for (name, count) in &rhs.events {
-            match self.events.get_mut(name) {
-                Some(value) => *value += count,
+        for (name, count) in &rhs.counters {
+            match self.counters.get_mut(name) {
+                Some(value) => *value += *count,
                 None => {
-                    self.events.insert(name.clone(), *count);
+                    self.counters.insert(name.clone(), *count);
                 }
-            }
+            };
         }
     }
 }
