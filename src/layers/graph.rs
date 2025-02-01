@@ -81,7 +81,7 @@ struct State {
 impl State {
     fn print_zero_level_events(&mut self) {
         if !self.zero_level_events.is_empty() {
-            println!("{}\n", self.zero_level_events.format("\n"));
+            println!("> {}\n", self.zero_level_events.format().join("\n> "));
 
             self.zero_level_events.clear();
         }
@@ -359,9 +359,6 @@ impl GraphNode {
                 .collect();
             info.push(format!("{{ {} }}", kv.join(", ")))
         }
-        if !self.events.is_empty() {
-            info.push(format!("\nEvents:\n  {} \n", self.events.format("\n  ")));
-        }
 
         let name = &self.name;
         let execution_time = self.execution_duration;
@@ -448,6 +445,7 @@ impl GraphNode {
 
         LogTree {
             label: self.label(root_time, &config),
+            events: self.events.format(),
             children: children
                 .into_iter()
                 .map(|child| child.render_tree(root_time, config))

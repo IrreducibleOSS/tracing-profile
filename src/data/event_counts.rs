@@ -84,8 +84,8 @@ impl EventCounts {
         self.counters.clear();
     }
 
-    /// Format the event counts as a string with the given separator.
-    pub fn format(&self, separator: &str) -> String {
+    /// Format the event counts as a strings
+    pub fn format(&self) -> Vec<String> {
         let mut ordered_events: Vec<_> = self.counters.iter().collect();
         ordered_events.sort_by_key(|(name, _)| *name);
 
@@ -93,7 +93,6 @@ impl EventCounts {
             .iter()
             .map(|(name, count)| format!("{name}: {count}"))
             .collect::<Vec<_>>()
-            .join(separator)
     }
 
     #[cfg(test)]

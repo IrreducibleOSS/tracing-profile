@@ -4,12 +4,16 @@ use std::fmt::Write;
 
 pub struct LogTree {
     pub label: String,
+    pub events: Vec<String>,
     pub children: Vec<LogTree>,
 }
 
 impl std::fmt::Display for LogTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.label)?;
+        for event in &self.events {
+            writeln!(f, "├>{}", event)?;
+        }
         self.display_children(f, Vec::new())
     }
 }
@@ -36,6 +40,15 @@ impl LogTree {
                     (false, true) => writeln!(f, "{}    {}", prefix, label)?,
                     (false, false) => writeln!(f, "{}│   {}", prefix, label)?,
                 }
+            }
+
+            for event in &child.events {
+                if is_last {
+                    writeln!(f, "{}   ├>{}",prefix, event)?;
+                } else {
+                    writeln!(f, "{}│  ├>{}",prefix, event)?;
+                }
+               
             }
 
             if !child.children.is_empty() {
