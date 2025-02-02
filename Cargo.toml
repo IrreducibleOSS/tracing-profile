@@ -23,6 +23,7 @@ tracing-tracy = { version = "0.11.3", optional = true }
 
 [dev-dependencies]
 rayon = "1.10.0"
+rusty-fork = "0.3.0"
 
 [features]
 ittapi = ["dep:ittapi"]

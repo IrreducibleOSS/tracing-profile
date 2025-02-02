@@ -262,100 +262,104 @@ mod tests {
     use super::*;
     use rayon::iter::IntoParallelIterator;
     use rayon::prelude::*;
+    use rusty_fork::rusty_fork_test;
     use tracing::debug_span;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::prelude::*;
 
-    #[test]
-    fn cpu_time1() {
-        tracing_subscriber::registry()
-            .with(Layer::new("/tmp/output1.csv"))
-            .init();
+    // Since tracing_subscriber::registry() is a global singleton, we need to run the tests in separate processes.
+    rusty_fork_test! {
+        #[test]
+        fn cpu_time1() {
+            tracing_subscriber::registry()
+                .with(Layer::new("/tmp/output1.csv"))
+                .init();
 
-        let _scope = debug_span!("parent span").entered();
-        for _ in 1..5 {
-            std::thread::sleep(Duration::from_secs(1));
+            let _scope = debug_span!("parent span").entered();
+            for _ in 1..5 {
+                std::thread::sleep(Duration::from_secs(1));
+            }
+
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
         }
 
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-    }
+        #[test]
+        fn cpu_time2() {
+            tracing_subscriber::registry()
+                .with(Layer::new("/tmp/output2.csv"))
+                .init();
 
-    #[test]
-    fn cpu_time2() {
-        tracing_subscriber::registry()
-            .with(Layer::new("/tmp/output2.csv"))
-            .init();
+            let _scope = debug_span!("parent span").entered();
+            (0..5).into_par_iter().for_each(|_| {
+                let start = Instant::now();
+                while start.elapsed().as_secs() < 1 {}
+            });
 
-        let _scope = debug_span!("parent span").entered();
-        (0..5).into_par_iter().for_each(|_| {
             let start = Instant::now();
             while start.elapsed().as_secs() < 1 {}
-        });
+        }
 
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-    }
+        #[test]
+        fn cpu_time3() {
+            tracing_subscriber::registry()
+                .with(Layer::new("/tmp/output3.csv"))
+                .init();
 
-    #[test]
-    fn cpu_time3() {
-        tracing_subscriber::registry()
-            .with(Layer::new("/tmp/output3.csv"))
-            .init();
+            let _scope = debug_span!("parent span").entered();
+            (0..5).into_par_iter().for_each(|_| {
+                std::thread::sleep(Duration::from_secs(1));
+            });
 
-        let _scope = debug_span!("parent span").entered();
-        (0..5).into_par_iter().for_each(|_| {
-            std::thread::sleep(Duration::from_secs(1));
-        });
-
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-    }
-
-    #[test]
-    fn cpu_time4() {
-        tracing_subscriber::registry()
-            .with(Layer::new("/tmp/output4.csv"))
-            .init();
-
-        let _scope = debug_span!("parent span").entered();
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-
-        let _scope2 = debug_span!("child span").entered();
-
-        (0..5).into_par_iter().for_each(|_| {
             let start = Instant::now();
             while start.elapsed().as_secs() < 1 {}
-        });
+        }
 
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-    }
+        #[test]
+        fn cpu_time4() {
+            tracing_subscriber::registry()
+                .with(Layer::new("/tmp/output4.csv"))
+                .init();
 
-    #[test]
-    fn cpu_time5() {
-        tracing_subscriber::registry()
-            .with(Layer::new("/tmp/output5.csv"))
-            .init();
-
-        let _scope = debug_span!("parent span").entered();
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
-
-        (0..2).into_par_iter().for_each(|_| {
+            let _scope = debug_span!("parent span").entered();
             let start = Instant::now();
             while start.elapsed().as_secs() < 1 {}
-        });
 
-        let _scope2 = debug_span!("child span").entered();
+            let _scope2 = debug_span!("child span").entered();
 
-        (0..5).into_par_iter().for_each(|_| {
+            (0..5).into_par_iter().for_each(|_| {
+                let start = Instant::now();
+                while start.elapsed().as_secs() < 1 {}
+            });
+
             let start = Instant::now();
             while start.elapsed().as_secs() < 1 {}
-        });
+        }
 
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 1 {}
+        #[test]
+        fn cpu_time5() {
+            tracing_subscriber::registry()
+                .with(Layer::new("/tmp/output5.csv"))
+                .init();
+
+            let _scope = debug_span!("parent span").entered();
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+
+            (0..2).into_par_iter().for_each(|_| {
+                let start = Instant::now();
+                while start.elapsed().as_secs() < 1 {}
+            });
+
+            let _scope2 = debug_span!("child span").entered();
+
+            (0..5).into_par_iter().for_each(|_| {
+                let start = Instant::now();
+                while start.elapsed().as_secs() < 1 {}
+            });
+
+            let start = Instant::now();
+            while start.elapsed().as_secs() < 1 {}
+        }
     }
 }

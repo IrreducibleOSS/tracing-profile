@@ -80,6 +80,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use rusty_fork::rusty_fork_test;
     use tracing::{debug_span, event, Level};
 
     use super::*;
@@ -134,10 +135,13 @@ mod tests {
         event!(name: "event after last span", Level::DEBUG, {value = 20});
     }
 
-    #[test]
-    fn all_layers() {
-        let _guard = init_tracing().unwrap();
+    // Since tracing_subscriber::registry() is a global singleton, we need to run the tests in separate processes.
+    rusty_fork_test! {
+        #[test]
+        fn all_layers() {
+            let _guard = init_tracing().unwrap();
 
-        _ = make_spans();
+            _ = make_spans();
+        }
     }
 }
