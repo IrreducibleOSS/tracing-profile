@@ -1,5 +1,5 @@
 [package]
-version = "0.10.1"
+version = "0.10.2"
 edition = "2021"
 name = "tracing-profile"
 authors = ["Irreducible Team <opensource@irreducible.com>"]
@@ -7,7 +7,7 @@ description = "A span based profiler, utilizing the tracing crate"
 keywords = ["metrics", "profiling", "tracing"]
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://gitlab.com/IrreducibleOSS/tracing-profile"
+repository = "https://github.com/IrreducibleOSS/tracing-profile"
 
 [dependencies]
 cfg-if = "1.0.0"
