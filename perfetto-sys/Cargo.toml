@@ -7,7 +7,7 @@ description = "Low-level bindings to Perfetto, optionally used by the tracing-pr
 keywords = ["profiling", "tracing", "perfetto"]
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://gitlab.com/IrreducibleOSS/tracing-profile"
+repository = "https://github.com/IrreducibleOSS/tracing-profile"
 include = [
     "build.rs",
     "Cargo.toml",
