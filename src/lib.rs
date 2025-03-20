@@ -49,6 +49,7 @@ mod data;
 mod env_utils;
 mod errors;
 mod layers;
+pub mod utils;
 
 #[cfg(feature = "ittapi")]
 pub use layers::ittapi::Layer as IttApiLayer;
