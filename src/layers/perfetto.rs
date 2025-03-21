@@ -1,5 +1,6 @@
 // Copyright 2024 Irreducible Inc.
 
+use gethostname::gethostname;
 use perfetto_sys::{BackendConfig, EventData, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
@@ -8,6 +9,8 @@ use tracing::{
 
 use crate::data::{with_span_storage_mut, CounterValue, CounterVisitor, PerfettoMetadata};
 use crate::errors::err_msg;
+
+use crate::utils::*;
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {
@@ -90,10 +93,25 @@ impl Layer {
     /// - `PERFETTO_BIN_PATH`: path to the perfetto binaries. If not set, the system path will be used. Is used only with the system backend.
     /// - `PERFETTO_CFG_PATH`: path to the perfetto config file. If not set, the default one `config/system_profiling.cfg` will be used. Is used only with the system backend.
     /// - `PERFETTO_BUFFER_SIZE_KB`: size of the buffer in kilobytes. Default: 50 * 1024. Is used only with the in-process backend.
+    /// - `PERFETTO_PLATFORM_NAME`: custom platform name. Default: architecture of the CPU that is currently in use.
     pub fn new_from_env() -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
         let trace_file_patch = match std::env::var("PERFETTO_TRACE_FILE_PATH") {
             Ok(path) => path,
-            Err(_) => "tracing.perfetto-trace".to_string(),
+            Err(_) => {
+                let time = get_formatted_time();
+                let branch = get_current_branch_revision();
+                let platform = std::env::var("PERFETTO_PLATFORM_NAME")
+                    .unwrap_or(std::env::consts::ARCH.to_string());
+                let hostname = gethostname().into_string();
+
+                format!(
+                    "{}{}{}{}.perfetto-trace",
+                    time,
+                    branch.map_or(String::new(), |b| format!("-{}", b)),
+                    format!("-{}", platform),
+                    hostname.map_or(String::new(), |h| format!("-{}", h)),
+                )
+            }
         };
 
         let backend = match std::env::var("PERFETTO_FUSE") {

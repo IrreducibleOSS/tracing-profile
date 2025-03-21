@@ -44,11 +44,10 @@ impl LogTree {
 
             for event in &child.events {
                 if is_last {
-                    writeln!(f, "{}   ├>{}",prefix, event)?;
+                    writeln!(f, "{}   ├>{}", prefix, event)?;
                 } else {
-                    writeln!(f, "{}│  ├>{}",prefix, event)?;
+                    writeln!(f, "{}│  ├>{}", prefix, event)?;
                 }
-               
             }
 
             if !child.children.is_empty() {
