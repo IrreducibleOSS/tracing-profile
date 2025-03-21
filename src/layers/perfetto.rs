@@ -1,5 +1,6 @@
 // Copyright 2024 Irreducible Inc.
 
+use gethostname::gethostname;
 use perfetto_sys::{BackendConfig, EventData, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
@@ -97,16 +98,18 @@ impl Layer {
         let trace_file_patch = match std::env::var("PERFETTO_TRACE_FILE_PATH") {
             Ok(path) => path,
             Err(_) => {
-                let timestamp = get_unix_timestamp();
-                let branch = get_current_git_branch();
+                let time = get_formatted_time();
+                let branch = get_current_branch_revision();
                 let platform = std::env::var("PERFETTO_PLATFORM_NAME")
                     .unwrap_or(std::env::consts::ARCH.to_string());
+                let hostname = gethostname().into_string();
 
                 format!(
-                    "{}-{}{}.perfetto-trace",
-                    timestamp,
-                    platform,
-                    branch.map_or(String::new(), |b| format!("-{}", b))
+                    "{}{}{}{}.perfetto-trace",
+                    time,
+                    branch.map_or(String::new(), |b| format!("-{}", b)),
+                    format!("-{}", platform),
+                    hostname.map_or(String::new(), |h| format!("-{}", h)),
                 )
             }
         };
