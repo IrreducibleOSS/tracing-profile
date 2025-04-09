@@ -1,5 +1,5 @@
 [package]
-version = "0.10.3"
+version = "0.10.4"
 edition = "2021"
 name = "tracing-profile"
 authors = ["Irreducible Team <opensource@irreducible.com>"]
