@@ -51,6 +51,7 @@ void *init_perfetto(uint32_t backend_type, const char* output_file, size_t buffe
 void deinit_perfetto(void *guard);
 
 /// @brief Start a new tracking event.
+/// @param event_type Event type.
 /// @param category Event category. If null, the default category will be used.
 /// @param name Event name. Must not be null.
 /// @param track_id Track ID for the event. If null, no explicit track ID will be used.

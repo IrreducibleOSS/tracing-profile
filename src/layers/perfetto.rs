@@ -78,7 +78,7 @@ impl<'a> Visit for SpanVisitor<'a> {
 ///  - `value`: value of the counter, integer or double. Required.
 ///  - `unit`: unit of the counter. Optional.
 ///  - `incremental`: if set to true, the counter will be treated as incremental. Optional.
-/// - events with name matching the prefix in `PERFETTO_EVENT_FILTERS` will be converted into perfetto instant events.
+/// - all other events are converted into perfetto instant events.
 ///
 /// ```ignore
 /// // At the beginning of the program

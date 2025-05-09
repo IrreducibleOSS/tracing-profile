@@ -170,7 +170,7 @@ void create_event(EventType event_type, const char* category, const char* name, 
 	};
 
 	auto name_str = perfetto::DynamicString{name};
-    auto category_str = category ? perfetto::DynamicCategory{category} : perfetto::DynamicCategory{"default"};
+	auto category_str = category ? perfetto::DynamicCategory{category} : perfetto::DynamicCategory{"default"};
 
 	if (event_type == EventType::Begin) {
 		if (track_id) {
