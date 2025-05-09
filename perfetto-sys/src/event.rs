@@ -24,6 +24,12 @@ enum ArgType {
     BoolKeyValue,
 }
 
+#[repr(u8)]
+enum EventType {
+    Span,
+    Instant,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct KeyValue<T> {
@@ -48,7 +54,7 @@ struct PerfettoArg {
 }
 
 extern "C" {
-    fn create_event(category: *const c_char, name: *const c_char, track_id: *const u64, args: *const PerfettoArg, arg_count: usize);
+    fn create_event(event_type: EventType, category: *const c_char, name: *const c_char, track_id: *const u64, args: *const PerfettoArg, arg_count: usize);
     fn destroy_event(category: *const c_char, track_id: *const u64);
 }
 
@@ -156,6 +162,7 @@ pub struct TraceEvent {
 impl TraceEvent {
     pub fn new(event_data: EventData) -> Self {
         unsafe { create_event(
+            EventType::Span,
             event_data.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()), 
             event_data.name.as_ptr(),
             event_data.track_id.as_ref().map(|id| id as *const u64).unwrap_or(null()),
@@ -186,5 +193,19 @@ impl Drop for TraceEvent {
         };
 
         unsafe { destroy_event(self.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()), track_id) };
+    }
+}
+
+/// Emit the given `EventData` as a Perfetto instant event with all metadata.
+pub fn create_instant_event(event_data: EventData) {
+    unsafe {
+        create_event(
+            EventType::Instant,
+            event_data.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()),
+            event_data.name.as_ptr(),
+            event_data.track_id.as_ref().map(|id| id as *const u64).unwrap_or(null()),
+            event_data.args.as_ptr(),
+            event_data.args.len(),
+        );
     }
 }
