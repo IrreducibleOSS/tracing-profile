@@ -86,10 +86,7 @@ impl<'a> Visit for SpanVisitor<'a> {
 ///
 /// // guard should be kept alive for the duration of the program
 /// ```
-pub struct Layer {
-    /// Optional list of event-name prefixes to forward as instant events
-    filter_prefixes: Option<Vec<String>>,
-}
+pub struct Layer {}
 
 impl Layer {
     /// Create a new layer with the settings from the environment.
@@ -136,24 +133,8 @@ impl Layer {
             }
         };
 
-        let filter_prefixes = std::env::var("PERFETTO_EVENT_FILTERS")
-            .ok()
-            .and_then(|val| {
-                let v: Vec<String> = val
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string)
-                    .collect();
-                if v.is_empty() {
-                    None
-                } else {
-                    Some(v)
-                }
-            });
-
         let guard = PerfettoGuard::new(backend, &trace_file_patch)?;
-        Ok((Self { filter_prefixes }, guard))
+        Ok((Self {}, guard))
     }
 }
 
@@ -202,17 +183,8 @@ where
             return;
         }
 
-        // 2) Ignore events that don't match the filter prefixes.
-        let prefixes = match &self.filter_prefixes {
-            Some(v) => v,
-            None => return,
-        };
+        // 2) Record the event as an instant event with all key/value fields.
         let name = event.metadata().name();
-        if !prefixes.iter().any(|prefix| name.starts_with(prefix)) {
-            return;
-        }
-
-        // 3) Record the event as an instant event with all key/value fields.
         let mut event_data = EventData::new(name);
         event.record(&mut SpanVisitor(&mut event_data));
         let _instant = InstantEvent::new(event_data);
