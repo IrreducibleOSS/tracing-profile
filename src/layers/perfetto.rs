@@ -1,7 +1,7 @@
 // Copyright 2024 Irreducible Inc.
 
 use gethostname::gethostname;
-use perfetto_sys::{BackendConfig, EventData, PerfettoGuard};
+use perfetto_sys::{BackendConfig, EventData, InstantEvent, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
     span,
@@ -78,6 +78,7 @@ impl<'a> Visit for SpanVisitor<'a> {
 ///  - `value`: value of the counter, integer or double. Required.
 ///  - `unit`: unit of the counter. Optional.
 ///  - `incremental`: if set to true, the counter will be treated as incremental. Optional.
+/// - events with name matching the prefix in `PERFETTO_EVENT_FILTERS` will be converted into perfetto instant events.
 ///
 /// ```ignore
 /// // At the beginning of the program
@@ -85,7 +86,10 @@ impl<'a> Visit for SpanVisitor<'a> {
 ///
 /// // guard should be kept alive for the duration of the program
 /// ```
-pub struct Layer {}
+pub struct Layer {
+    /// Optional list of event-name prefixes to forward as instant events
+    filter_prefixes: Option<Vec<String>>,
+}
 
 impl Layer {
     /// Create a new layer with the settings from the environment.
@@ -132,8 +136,24 @@ impl Layer {
             }
         };
 
+        let filter_prefixes = std::env::var("PERFETTO_EVENT_FILTERS")
+            .ok()
+            .and_then(|val| {
+                let v: Vec<String> = val
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if v.is_empty() {
+                    None
+                } else {
+                    Some(v)
+                }
+            });
+
         let guard = PerfettoGuard::new(backend, &trace_file_patch)?;
-        Ok((Self {}, guard))
+        Ok((Self { filter_prefixes }, guard))
     }
 }
 
@@ -152,35 +172,50 @@ where
         let mut data = CounterVisitor::default();
         event.record(&mut data);
 
-        if !data.is_counter {
+        // 1) Counter events: record as counters, then exit.
+        if data.is_counter {
+            match data.value {
+                Some(CounterValue::Int(value)) => {
+                    perfetto_sys::set_counter_u64(
+                        event.metadata().name(),
+                        data.unit.as_ref().map(String::as_str),
+                        data.is_incremental,
+                        value,
+                    );
+                }
+                Some(CounterValue::Float(value)) => {
+                    perfetto_sys::set_counter_f64(
+                        event.metadata().name(),
+                        data.unit.as_ref().map(String::as_str),
+                        data.is_incremental,
+                        value,
+                    );
+                }
+                None => {
+                    err_msg!(
+                        "invalid event(missing either 'name' or 'value'): {:?}",
+                        event
+                    );
+                    return;
+                }
+            }
             return;
         }
 
-        match data.value {
-            Some(CounterValue::Int(value)) => {
-                perfetto_sys::set_counter_u64(
-                    event.metadata().name(),
-                    data.unit.as_ref().map(String::as_str),
-                    data.is_incremental,
-                    value,
-                );
-            }
-            Some(CounterValue::Float(value)) => {
-                perfetto_sys::set_counter_f64(
-                    event.metadata().name(),
-                    data.unit.as_ref().map(String::as_str),
-                    data.is_incremental,
-                    value,
-                );
-            }
-            None => {
-                err_msg!(
-                    "invalid event(missing either 'name' or 'value'): {:?}",
-                    event
-                );
-                return;
-            }
+        // 2) Ignore events that don't match the filter prefixes.
+        let prefixes = match &self.filter_prefixes {
+            Some(v) => v,
+            None => return,
         };
+        let name = event.metadata().name();
+        if !prefixes.iter().any(|prefix| name.starts_with(prefix)) {
+            return;
+        }
+
+        // 3) Record the event as an instant event with all key/value fields.
+        let mut event_data = EventData::new(name);
+        event.record(&mut SpanVisitor(&mut event_data));
+        let _instant = InstantEvent::new(event_data);
     }
 
     fn on_record(

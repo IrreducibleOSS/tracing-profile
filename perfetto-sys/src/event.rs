@@ -36,6 +36,7 @@ struct PerfettoArg {
 extern "C" {
     fn create_event(category: *const c_char, name: *const c_char, track_id: *const u64, args: *const PerfettoArg, arg_count: usize);
     fn destroy_event(category: *const c_char, track_id: *const u64);
+    fn instant_event(category: *const c_char, name: *const c_char, track_id: *const u64, args: *const PerfettoArg, arg_count: usize);
 }
 
 /// Represents a tracing event data.
@@ -176,5 +177,30 @@ impl Drop for TraceEvent {
         };
 
         unsafe { destroy_event(self.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()), track_id) };
+    }
+}
+
+/// A one-shot instant event: consumes your `EventData`, emits it, then returns.
+pub struct InstantEvent;
+
+impl InstantEvent {
+    /// Emit the given `EventData` as a Perfetto instant event with all metadata.
+    pub fn new(event_data: EventData) -> InstantEvent {
+        unsafe {
+            instant_event(
+                event_data.category
+                    .as_ref()
+                    .map(|s| s.as_ptr())
+                    .unwrap_or(null()),
+                event_data.name.as_ptr(),
+                event_data.track_id
+                    .as_ref()
+                    .map(|id| id as *const u64)
+                    .unwrap_or(null()),
+                event_data.args.as_ptr(),
+                event_data.args.len(),
+            );
+        }
+        InstantEvent
     }
 }
