@@ -11,7 +11,13 @@ enum class ArgType : uint8_t {
     I64KeyValue,
     U64KeyValue,
     BoolKeyValue,
-}; 
+};
+
+/// Event types for the PerfettoEventArg struct.
+enum class EventType {
+	Begin,
+	Instant,
+};
 
 /// Key-value pair with string key for the PerfettoEventArg struct.
 template <typename T>
@@ -50,20 +56,12 @@ void deinit_perfetto(void *guard);
 /// @param track_id Track ID for the event. If null, no explicit track ID will be used.
 /// @param args Information about tracking, flow and additional fields.
 /// @param arg_count Number of elements in `args`.
-void create_event(const char* category, const char* name, const uint64_t* track_id, const PerfettoEventArg* args, size_t arg_count);
+void create_event(EventType event_type, const char* category, const char* name, const uint64_t* track_id, const PerfettoEventArg* args, size_t arg_count);
 
 /// @brief End the most recent tracking event.
 /// @param category Event category. If null, the default category will be used.
 /// @param track_id Track ID for the event. If null, no explicit track ID will be used. This value must correspond to the track ID used in `create_event`.
 void destroy_event(const char* category, const uint64_t* track_id);
-
-/// @brief Record a zero-duration (“instant”) event.
-/// @param category Event category. If null, the default category will be used.
-/// @param name Event name. Must not be null.
-/// @param track_id Track ID for the event. If null, no explicit track ID will be used.
-/// @param args Additional event arguments (e.g., key-value annotations).
-/// @param arg_count Number of elements in `args`.
-void instant_event(const char* category, const char* name, const uint64_t* track_id, const PerfettoEventArg* args, size_t arg_count);
 
 /// @brief  Update a counter with an unsigned 64-bit integer value.
 /// @param category Counter category. If null, the default category will be used.
