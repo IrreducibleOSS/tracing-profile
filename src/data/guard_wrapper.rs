@@ -1,6 +1,5 @@
 /// A helper struct to wrap a guard and an inner object.
 #[allow(unused)]
-
 pub struct GuardWrapper<Current, Inner>(Current, Inner);
 
 impl<Current, Inner> GuardWrapper<Current, Inner> {

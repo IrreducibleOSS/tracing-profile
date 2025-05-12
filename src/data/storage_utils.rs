@@ -45,7 +45,7 @@ pub fn with_span_storage_mut<T, S>(
 
 /// Perform operation with immutable span storage value.
 #[allow(unused)]
-pub fn with_span_storage<T, S: tracing::Subscriber>(
+pub fn with_span_storage<T, S>(
     id: &span::Id,
     ctx: tracing_subscriber::layer::Context<'_, S>,
     f: impl FnOnce(&T),

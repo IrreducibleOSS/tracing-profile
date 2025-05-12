@@ -5,7 +5,7 @@ use {linear_map::LinearMap, std::ops::AddAssign};
 
 pub struct StoringFieldVisitor<'a>(pub &'a mut LinearMap<&'static str, String>);
 
-impl<'a> tracing::field::Visit for StoringFieldVisitor<'a> {
+impl tracing::field::Visit for StoringFieldVisitor<'_> {
     fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
         self.0.insert(field.name(), value.to_string());
     }
@@ -70,7 +70,7 @@ impl<'a, Writer: Write> WritingFieldVisitor<'a, Writer> {
     }
 }
 
-impl<'a, Writer: Write> tracing::field::Visit for WritingFieldVisitor<'a, Writer> {
+impl<Writer: Write> tracing::field::Visit for WritingFieldVisitor<'_, Writer> {
     fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
         self.write_separator();
         write!(self.writer, "{}: {}", field.name(), value).expect("failed to write f64");
