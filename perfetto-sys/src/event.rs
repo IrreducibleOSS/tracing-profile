@@ -1,4 +1,18 @@
 use std::{ffi::{c_char, CString}, ptr::null, thread::{self, ThreadId}};
+use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+ 
+// Get stable pointer for `key`
+fn get_key_ptr(key: &'static str) -> *const c_char {
+    static KEY_POOL: OnceLock<Mutex<HashMap<&'static str, CString>>> = OnceLock::new();
+    let map = KEY_POOL.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = map.lock().unwrap();
+    guard
+        .entry(key)
+        .or_insert_with(|| CString::new(key).expect("invalid key string"))
+        .as_ptr()
+}
+
 
 #[repr(u8)]
 enum ArgType {
@@ -78,55 +92,51 @@ impl EventData {
         });
     }
 
-    pub fn add_u64_field(&mut self, key: &str, value: u64) {
-        let key = CString::new(key).expect("key is invalid string");
+    pub fn add_u64_field(&mut self, key: &'static str, value: u64) {
+        let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue {  u64_key_value: KeyValue { key: key.as_ptr(), value } },
+            data: ArgValue {  u64_key_value: KeyValue { key: key_ptr, value } },
             arg_type: ArgType::U64KeyValue,
         });
-        self.strings_storage.push(key);
     }
 
-    pub fn add_i64_field(&mut self, key: &str, value: i64) {
-        let key = CString::new(key).expect("key is invalid string");
+    pub fn add_i64_field(&mut self, key: &'static str, value: i64) {
+        let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { i64_key_value: KeyValue { key: key.as_ptr(), value } },
+            data: ArgValue { i64_key_value: KeyValue { key: key_ptr, value } },
             arg_type: ArgType::I64KeyValue,
         });
-        self.strings_storage.push(key);
     }
 
-    pub fn add_f64_field(&mut self, key: &str, value: f64) {
-        let key = CString::new(key).expect("key is invalid string");
+    pub fn add_f64_field(&mut self, key: &'static str, value: f64) {
+        let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { f64_key_value: KeyValue { key: key.as_ptr(), value } },
+            data: ArgValue { f64_key_value: KeyValue { key: key_ptr, value } },
             arg_type: ArgType::F64KeyValue,
         });
-        self.strings_storage.push(key);
     }
 
-    pub fn add_bool_field(&mut self, key: &str, value: bool) {
-        let key = CString::new(key).expect("key is invalid string");
+    pub fn add_bool_field(&mut self, key: &'static str, value: bool) {
+        let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { bool_key_value: KeyValue { key: key.as_ptr(), value } },
+            data: ArgValue { bool_key_value: KeyValue { key: key_ptr, value } },
             arg_type: ArgType::BoolKeyValue,
         });
-        self.strings_storage.push(key);
     }
 
-    pub fn add_string_arg(&mut self, key: &str, value: &str) {
-        let key = CString::new(key).expect("key is invalid string");
+    pub fn add_string_arg(&mut self, key: &'static str, value: &str) {
+        let key_ptr = get_key_ptr(key);
         let value = CString::new(value).expect("value is invalid string");
         self.args.push(PerfettoArg {
-            data: ArgValue { string_key_value: KeyValue { key: key.as_ptr(), value: value.as_ptr() } },
+            data: ArgValue { string_key_value: KeyValue { key: key_ptr, value: value.as_ptr() } },
             arg_type: ArgType::StringKeyValue,
         });
-        self.strings_storage.push(key);
         self.strings_storage.push(value);
     }
 }
 
-/// Safety: raw pointer in event data points to the strings in the strings_storage
+/// Safety: raw pointers in EventData.args remain valid because field key strings are stored globally (static lifetime),
+/// and any value strings are stored in this EventData's strings_storage.
 unsafe impl Send for EventData {}
 unsafe impl Sync for EventData {}
 
