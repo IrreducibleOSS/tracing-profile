@@ -2,23 +2,15 @@ use std::{ffi::{c_char, CString}, ptr::null, thread::{self, ThreadId}};
 use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
  
-// ----------------------------------------------------------------------------
-// Global pool of CStrings for field keys (stable pointers)
-static KEY_POOL: OnceLock<Mutex<HashMap<&'static str, CString>>> = OnceLock::new();
-
-// Lookup-or-insert the CString for `key` and return its stable pointer
+// Get stable pointer for `key`
 fn get_key_ptr(key: &'static str) -> *const c_char {
+    static KEY_POOL: OnceLock<Mutex<HashMap<&'static str, CString>>> = OnceLock::new();
     let map = KEY_POOL.get_or_init(|| Mutex::new(HashMap::new()));
     let mut guard = map.lock().unwrap();
-    match guard.get(key) {
-        Some(cstr) => cstr.as_ptr(),
-        None => {
-            let cstr = CString::new(key).expect("invalid key string");
-            let ptr = cstr.as_ptr();
-            guard.insert(key, cstr);
-            ptr
-        }
-    }
+    guard
+        .entry(key)
+        .or_insert_with(|| CString::new(key).expect("invalid key string"))
+        .as_ptr()
 }
 
 
