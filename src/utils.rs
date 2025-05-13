@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use chrono::{Local, TimeZone, Utc};
 use git2::{Repository, StatusOptions};
 

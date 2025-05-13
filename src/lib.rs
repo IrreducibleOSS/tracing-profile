@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 //! A span based profiler, utilizing the [tracing](https://docs.rs/tracing/latest/tracing/) crate.
 //!
 //! # Overview

@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 //https://android.googlesource.com/platform/external/perfetto/+/refs/tags/android-14.0.0_r50/examples/sdk/
 //https://perfetto.dev/docs/instrumentation/tracing-sdk
 fn main() {

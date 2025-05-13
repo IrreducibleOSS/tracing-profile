@@ -1,4 +1,4 @@
-// Copyright 2024 Ulvetanna Inc.
+// Copyright 2024-2025 Irreducible Inc.
 
 use ittapi::{Domain, Task};
 use std::{fmt::Write, sync::Once};

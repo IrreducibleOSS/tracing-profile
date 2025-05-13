@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 pub mod csv;
 pub mod graph;
 pub mod init_tracing;

@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use std::{env, fmt::Display, str::FromStr};
 
 pub fn get_env_var<T: FromStr + Display>(name: &str, default: T) -> T {

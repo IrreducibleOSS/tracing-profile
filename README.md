@@ -146,13 +146,13 @@ fn all_layers() {
 
 ## Authors
 
-`tracing-profile` is developed and maintained by [Ulvetanna](https://www.ulvetanna.io).
+`tracing-profile` is developed and maintained by [Irreducible](https://www.irreducible.com/).
 
 ## License
 
 MIT License
 
-Copyright (c) 2024 Ulvetanna, Inc
+Copyright (c) 2024-2025 Irreducible Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

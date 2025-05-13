@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use linear_map::LinearMap;
 use nix::sys::time::TimeValLike;
 use nix::time::{clock_gettime, ClockId};

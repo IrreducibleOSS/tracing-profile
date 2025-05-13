@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 /// A helper struct to wrap a guard and an inner object.
 #[allow(unused)]
 pub struct GuardWrapper<Current, Inner>(Current, Inner);
