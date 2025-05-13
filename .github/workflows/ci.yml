@@ -29,13 +29,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Copyrights check
-        run: ./scripts/check_copyrights.sh
+        run: ./scripts/check_copyright_notice.sh
 
       - name: Check code is formatted
         run: cargo fmt -- --check
 
       - name: Run Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --tests --examples --benches -- -D warnings
 
   test:
     name: Run Tests
