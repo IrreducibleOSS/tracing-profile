@@ -60,6 +60,7 @@ struct TaskData {
 }
 
 /// Returns static domain for ittapi tracing
+#[allow(static_mut_refs)]
 fn global_domain() -> &'static Domain {
     // Unfortunately we can't use `OnceLock` here because `Domain` doesn't implement `Send`.
     // `OnceLock` requires generic type to implement `Send` in order to be `Sync` for the case when

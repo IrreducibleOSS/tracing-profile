@@ -145,7 +145,7 @@ mod tests {
         fn all_layers() {
             let _guard = init_tracing().unwrap();
 
-            _ = make_spans();
+            make_spans();
         }
     }
 }
