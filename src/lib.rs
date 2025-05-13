@@ -88,6 +88,7 @@ mod tests {
 
     fn make_spans() {
         event!(name: "event outside of span", Level::DEBUG, {value = 10});
+        event!(name: "test_instant_event", Level::DEBUG, test_key = "test_value");
 
         {
             let span = debug_span!("root span");

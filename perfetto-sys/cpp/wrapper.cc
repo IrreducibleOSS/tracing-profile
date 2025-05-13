@@ -140,7 +140,7 @@ void deinit_perfetto(void *guard) {
 	delete p;
 }
 
-void create_event(const char* category, const char* name, const uint64_t* track_id, const PerfettoEventArg* args, size_t arg_count) {
+void create_event(EventType event_type, const char* category, const char* name, const uint64_t* track_id, const PerfettoEventArg* args, size_t arg_count) {
 	assert(name);
 	assert(args || arg_count == 0);
 	
@@ -170,18 +170,19 @@ void create_event(const char* category, const char* name, const uint64_t* track_
 	};
 
 	auto name_str = perfetto::DynamicString{name};
-	if (category) {
-		perfetto::DynamicCategory category_name{category};
+	auto category_str = category ? perfetto::DynamicCategory{category} : perfetto::DynamicCategory{"default"};
+
+	if (event_type == EventType::Span) {
 		if (track_id) {
-			TRACE_EVENT_BEGIN(category_name, name_str, perfetto::Track(*track_id), set_props);
+			TRACE_EVENT_BEGIN(category_str, name_str, perfetto::Track(*track_id), set_props);
 		} else {
-			TRACE_EVENT_BEGIN(category_name, name_str, set_props);
+			TRACE_EVENT_BEGIN(category_str, name_str, set_props);
 		}
-	} else {
+	} else if (event_type == EventType::Instant) {
 		if (track_id) {
-			TRACE_EVENT_BEGIN("default", name_str, perfetto::Track(*track_id), set_props);
+			TRACE_EVENT_INSTANT(category_str, name_str, perfetto::Track(*track_id), set_props);
 		} else {
-			TRACE_EVENT_BEGIN("default", name_str, set_props);
+			TRACE_EVENT_INSTANT(category_str, name_str, set_props);
 		}
 	}
 }
