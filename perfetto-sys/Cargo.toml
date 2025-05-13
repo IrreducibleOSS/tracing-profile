@@ -1,6 +1,6 @@
 [package]
 name = "tracing-profile-perfetto-sys"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 authors = ["Irreducible Team <opensource@irreducible.com>"]
 description = "Low-level bindings to Perfetto, optionally used by the tracing-profile crate"
