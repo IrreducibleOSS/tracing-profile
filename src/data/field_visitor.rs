@@ -1,4 +1,4 @@
-// Copyright 2024 Ulvetanna Inc.
+// Copyright 2024-2025 Irreducible Inc.
 
 use std::{borrow::Cow, fmt::Write};
 use {linear_map::LinearMap, std::ops::AddAssign};

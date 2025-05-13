@@ -1,4 +1,4 @@
-// Copyright 2024 Ulvetanna Inc.
+// Copyright 2024-2025 Irreducible Inc.
 
 use ittapi::{Domain, Task};
 use std::{fmt::Write, sync::Once};
@@ -60,6 +60,7 @@ struct TaskData {
 }
 
 /// Returns static domain for ittapi tracing
+#[allow(static_mut_refs)]
 fn global_domain() -> &'static Domain {
     // Unfortunately we can't use `OnceLock` here because `Domain` doesn't implement `Send`.
     // `OnceLock` requires generic type to implement `Send` in order to be `Sync` for the case when

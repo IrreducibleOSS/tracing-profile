@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 //! A span based profiler, utilizing the [tracing](https://docs.rs/tracing/latest/tracing/) crate.
 //!
 //! # Overview
@@ -143,7 +145,7 @@ mod tests {
         fn all_layers() {
             let _guard = init_tracing().unwrap();
 
-            _ = make_spans();
+            make_spans();
         }
     }
 }

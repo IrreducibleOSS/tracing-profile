@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use tracing::span;
 use tracing_subscriber::registry::LookupSpan;
 

@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use std::{ffi::{c_char, CString}, ptr::null, thread::{self, ThreadId}};
 use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;

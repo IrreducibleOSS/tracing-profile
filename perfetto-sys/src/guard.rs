@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 use std::{ffi::{c_char, c_void, CString}, io::Write, path::{Path, PathBuf}, process::{Child, Command}, thread, time::Duration};
 use crate::Error;
 

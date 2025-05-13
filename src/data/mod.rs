@@ -1,3 +1,5 @@
+// Copyright 2024-2025 Irreducible Inc.
+
 mod event_counts;
 mod field_visitor;
 mod guard_wrapper;

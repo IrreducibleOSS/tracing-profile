@@ -1,4 +1,4 @@
-// Copyright 2024 Irreducible Inc.
+// Copyright 2024-2025 Irreducible Inc.
 
 use gethostname::gethostname;
 use perfetto_sys::{create_instant_event, BackendConfig, EventData, PerfettoGuard};
@@ -24,7 +24,7 @@ const PERFETTO_FLOW_ID_FIELD: &str = "perfetto_flow_id";
 
 struct SpanVisitor<'a>(&'a mut EventData);
 
-impl<'a> Visit for SpanVisitor<'a> {
+impl Visit for SpanVisitor<'_> {
     fn record_str(&mut self, field: &Field, value: &str) {
         match field.name() {
             PERFETTO_CATEGORY_FIELD => self.0.set_category(value),
@@ -214,7 +214,7 @@ where
                 Some(CounterValue::Int(value)) => {
                     perfetto_sys::set_counter_u64(
                         event.metadata().name(),
-                        data.unit.as_ref().map(String::as_str),
+                        data.unit.as_deref(),
                         data.is_incremental,
                         value,
                     );
@@ -222,7 +222,7 @@ where
                 Some(CounterValue::Float(value)) => {
                     perfetto_sys::set_counter_f64(
                         event.metadata().name(),
-                        data.unit.as_ref().map(String::as_str),
+                        data.unit.as_deref(),
                         data.is_incremental,
                         value,
                     );
@@ -272,9 +272,8 @@ where
             }
             None => {
                 err_msg!("failed to get span on_enter");
-                return;
             }
-        };
+        }
     }
 
     fn on_enter(&self, id: &span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
