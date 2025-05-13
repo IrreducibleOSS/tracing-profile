@@ -160,7 +160,7 @@ where
 
                 let mut fields = std::mem::take(&mut storage.fields);
                 if storage.rayon_ns > 0 {
-                    fields.insert("rayon_ns".into(), storage.rayon_ns.to_string());
+                    fields.insert("rayon_ns", storage.rayon_ns.to_string());
                 }
 
                 let cpu_diff = (end_cpu_time - storage.cpu_start_time.unwrap_or(end_cpu_time))

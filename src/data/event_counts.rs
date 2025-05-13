@@ -41,7 +41,6 @@ impl EventCounts {
                     (Some(value), Some(new_value)) => *value += new_value,
                     _ => {
                         err_msg!("invalid event {:?}", event);
-                        return;
                     }
                 };
             } else {
@@ -64,7 +63,7 @@ impl EventCounts {
         };
     }
 
-    pub fn increment_events_counter<'a>(&mut self, name: &'a str) {
+    pub fn increment_events_counter(&mut self, name: &str) {
         match self.counters.get_mut(name) {
             Some(value) => *value += 1,
             None => {

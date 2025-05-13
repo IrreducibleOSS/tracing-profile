@@ -335,7 +335,7 @@ impl GraphNode {
     /// Record the span node as event.
     /// Handy to calculate the number of spans of the type.
     fn record_self_as_event(&mut self) {
-        self.events.increment_events_counter(&self.name);
+        self.events.increment_events_counter(self.name);
     }
 
     fn print(mut self, config: &Config) {
@@ -391,7 +391,7 @@ impl GraphNode {
         let mut name_counter: HashMap<&str, usize> = HashMap::new();
 
         for (i, child) in self.child_nodes.iter().enumerate() {
-            let name_count = name_counter.entry(&child.name).or_insert(0);
+            let name_count = name_counter.entry(child.name).or_insert(0);
             *name_count += 1;
 
             let next = self.child_nodes.get(i + 1);
@@ -400,7 +400,7 @@ impl GraphNode {
                     let mut indexed_child = child.clone();
                     indexed_child
                         .metadata
-                        .insert("index".into(), format!("{}", name_count));
+                        .insert("index", format!("{}", name_count));
                     children.push(indexed_child);
                 } else {
                     aggregated_node = aggregated_node
@@ -432,7 +432,7 @@ impl GraphNode {
         }
 
         if config.display_unaccounted && !children.is_empty() {
-            let mut unaccounted = GraphNode::new("[unaccounted]".into());
+            let mut unaccounted = GraphNode::new("[unaccounted]");
             unaccounted.execution_duration = self.execution_duration
                 - self
                     .child_nodes
@@ -444,7 +444,7 @@ impl GraphNode {
         }
 
         LogTree {
-            label: self.label(root_time, &config),
+            label: self.label(root_time, config),
             events: self.events.format(),
             children: children
                 .into_iter()
