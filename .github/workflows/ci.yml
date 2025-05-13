@@ -28,6 +28,9 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
+      - name: Copyrights check
+        run: ./scripts/check_copyrights.sh
+
       - name: Check code is formatted
         run: cargo fmt -- --check
 
