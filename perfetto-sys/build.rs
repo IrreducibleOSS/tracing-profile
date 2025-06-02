@@ -3,10 +3,13 @@
 //https://android.googlesource.com/platform/external/perfetto/+/refs/tags/android-14.0.0_r50/examples/sdk/
 //https://perfetto.dev/docs/instrumentation/tracing-sdk
 fn main() {
-    // Building cpp will fail on non-linux targets so we perform this check
+    // Building cpp will fail on targets other than macOS and Linux so we perform this check
     // to produce a meaningful error message.
-    if !matches!(std::env::var("CARGO_CFG_TARGET_OS").as_deref(), Ok("linux")) {
-        panic!("Perfetto tracing is only supported on Linux");
+    if !matches!(
+        std::env::var("CARGO_CFG_TARGET_OS").as_deref(),
+        Ok("linux") | Ok("macos")
+    ) {
+        panic!("Perfetto tracing is only supported on Linux and macOS");
     }
 
     println!("cargo::rerun-if-changed=build.rs");
@@ -14,7 +17,12 @@ fn main() {
 
     cc::Build::new()
         .cpp(true)
-        .opt_level(std::env::var("CARGO_OPT_LEVEL").unwrap_or_else(|_| "2".to_string()).parse().unwrap())
+        .opt_level(
+            std::env::var("CARGO_OPT_LEVEL")
+                .unwrap_or_else(|_| "2".to_string())
+                .parse()
+                .unwrap(),
+        )
         .flag("-std=c++20")
         .file("cpp/wrapper.cc")
         .file("cpp/trace_categories.cc")
