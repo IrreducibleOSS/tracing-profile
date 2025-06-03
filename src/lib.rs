@@ -76,7 +76,10 @@ pub use perfetto_sys::PerfettoGuard;
 #[cfg(feature = "tracy")]
 pub use tracing_tracy::TracyLayer;
 
-pub use layers::init_tracing::init_tracing;
+pub use layers::init_tracing::{init_tracing, init_tracing_with_metadata};
+
+#[macro_use]
+mod macros;
 
 #[cfg(test)]
 mod tests {

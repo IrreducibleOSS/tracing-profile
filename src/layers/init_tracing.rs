@@ -50,6 +50,12 @@ pub enum Error {
 ///
 /// Returns the guard that should be kept alive for the duration of the program.
 pub fn init_tracing() -> Result<impl Drop, Error> {
+    init_tracing_with_metadata(&[])
+}
+
+pub fn init_tracing_with_metadata(
+    _metadata: &[(&'static str, String)],
+) -> Result<impl Drop, Error> {
     // Create print tree layer
     let (layer, guard) = PrintTreeLayer::new(PrintTreeConfig::default());
     let layer = tracing_subscriber::registry().with(layer.with_env_filter());
@@ -59,7 +65,7 @@ pub fn init_tracing() -> Result<impl Drop, Error> {
         cfg_if! {
             if #[cfg(feature = "perfetto")] {
                 let (new_layer, new_guard) =
-                    crate::PerfettoLayer::new_from_env()?;
+                    crate::PerfettoLayer::new_from_env(_metadata)?;
                 (layer.with(new_layer.with_env_filter()), crate::data::GuardWrapper::wrap(guard, new_guard))
             } else {
                 (layer, guard)
