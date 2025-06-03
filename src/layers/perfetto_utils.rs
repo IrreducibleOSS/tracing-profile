@@ -82,5 +82,24 @@ pub(crate) fn emit_run_metadata(
         event_data.add_string_arg("hostname", &host);
     }
 
+    // Extra metadata from the environment
+    // Format: "key1=val1,key2=val2,..."
+    if let Ok(raw) = std::env::var("PERFETTO_EXTRA_METADATA") {
+        for segment in raw.split(',') {
+            let segment = segment.trim();
+            if segment.is_empty() {
+                continue;
+            }
+            let mut parts = segment.splitn(2, '=');
+            if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+                let key = k.trim();
+                let val = v.trim();
+
+                let key_static: &'static str = Box::leak(key.to_string().into_boxed_str());
+                event_data.add_string_arg(key_static, val);
+            }
+        }
+    }
+
     create_instant_event(event_data);
 }
