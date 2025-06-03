@@ -6,6 +6,8 @@ pub mod init_tracing;
 
 #[cfg(feature = "perfetto")]
 pub mod perfetto;
+#[cfg(feature = "perfetto")]
+pub mod perfetto_utils;
 
 #[cfg(feature = "ittapi")]
 pub mod ittapi;

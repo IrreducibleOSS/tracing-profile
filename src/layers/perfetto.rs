@@ -1,6 +1,5 @@
 // Copyright 2024-2025 Irreducible Inc.
 
-use gethostname::gethostname;
 use perfetto_sys::{create_instant_event, BackendConfig, EventData, PerfettoGuard};
 use tracing::{
     field::{Field, Visit},
@@ -10,7 +9,8 @@ use tracing::{
 use crate::data::{with_span_storage_mut, CounterValue, CounterVisitor, PerfettoMetadata};
 use crate::errors::err_msg;
 
-use crate::utils::{get_formatted_time, get_git_info, sanitize_filename};
+use crate::layers::perfetto_utils::{compute_trace_path, emit_run_metadata};
+use crate::utils::{get_formatted_time, get_git_info};
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {
@@ -101,34 +101,7 @@ impl Layer {
         let (timestamp_filename, timestamp_iso) = get_formatted_time();
         let git_info = get_git_info();
 
-        // Compute the trace-file path:
-        //    - If PERFETTO_TRACE_FILE_PATH is set, use it verbatim.
-        //    - Otherwise generate
-        //        <timestamp>-<branch>-<commit_hash>[-dirty]-<platform>-<hostname>.perfetto-trace
-        //      and, if PERFETTO_TRACE_DIR is set, prepend that directory.
-        let output_path = if let Ok(p) = std::env::var("PERFETTO_TRACE_FILE_PATH") {
-            std::path::PathBuf::from(p)
-        } else {
-            let mut parts = Vec::with_capacity(6);
-            parts.push(timestamp_filename);
-            if let Some(g) = &git_info {
-                parts.push(sanitize_filename(&g.branch));
-                parts.push(g.commit_short.clone());
-                if !g.is_clean {
-                    parts.push("dirty".to_string());
-                }
-            }
-            let platform = std::env::var("PERFETTO_PLATFORM_NAME")
-                .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
-            parts.push(platform);
-            let hostname = gethostname().to_string_lossy().to_string();
-            parts.push(hostname);
-
-            let fname = format!("{}.perfetto-trace", parts.join("-"));
-
-            let dir = std::env::var("PERFETTO_TRACE_DIR").unwrap_or_else(|_| ".".to_string());
-            std::path::PathBuf::from(dir).join(fname)
-        };
+        let output_path = compute_trace_path(timestamp_filename, git_info.as_ref());
         let output_path_str = output_path.to_string_lossy().to_string();
 
         // Record the chosen path for external scripts
@@ -153,41 +126,7 @@ impl Layer {
         // Start tracing
         let guard = PerfettoGuard::new(backend, &output_path_str)?;
 
-        // Emit metadata
-        if let Some(g) = &git_info {
-            let mut event_data = EventData::new("metadata:run_info");
-            // Timestamps
-            event_data.add_string_arg("timestamp", &timestamp_iso);
-
-            // Git metadata
-            event_data.add_string_arg("git_branch", &g.branch);
-            event_data.add_string_arg("git_commit_short", &g.commit_short);
-            if let Some(msg) = &g.commit_message {
-                event_data.add_string_arg("git_commit_message", msg);
-            }
-            if let Some(author) = &g.commit_author {
-                event_data.add_string_arg("git_commit_author", author);
-            }
-            if let Some(time) = &g.commit_time {
-                event_data.add_string_arg("git_commit_time", time);
-            }
-            event_data.add_bool_field("git_clean", g.is_clean);
-
-            // Trace-file name only (no path)
-            if let Some(name) = output_path.file_name().and_then(|os| os.to_str()) {
-                event_data.add_string_arg("trace_filename", name);
-            }
-
-            // Other zero-dependency metadata
-            event_data.add_string_arg("crate_version", env!("CARGO_PKG_VERSION"));
-            event_data.add_string_arg("os", std::env::consts::OS);
-            event_data.add_string_arg("arch", std::env::consts::ARCH);
-            if let Ok(host) = gethostname().into_string() {
-                event_data.add_string_arg("hostname", &host);
-            }
-
-            create_instant_event(event_data);
-        }
+        emit_run_metadata(output_path, timestamp_iso, git_info.as_ref());
 
         Ok((Self {}, guard))
     }
