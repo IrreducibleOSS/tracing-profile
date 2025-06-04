@@ -45,6 +45,7 @@ pub(crate) fn emit_run_metadata(
     output_path: PathBuf,
     timestamp_iso: String,
     git_info: Option<&GitInfo>,
+    metadata: &[(&'static str, String)],
 ) {
     // Emit metadata
     let mut event_data = EventData::new("metadata:run_info");
@@ -80,6 +81,11 @@ pub(crate) fn emit_run_metadata(
     event_data.add_string_arg("arch", std::env::consts::ARCH);
     if let Ok(host) = gethostname().into_string() {
         event_data.add_string_arg("hostname", &host);
+    }
+
+    // Extra metadata from the metadata argument
+    for (key, val) in metadata {
+        event_data.add_string_arg(key, val);
     }
 
     // Extra metadata from the environment

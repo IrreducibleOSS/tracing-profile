@@ -97,7 +97,9 @@ impl Layer {
     /// - `PERFETTO_CFG_PATH`: path to the perfetto config file. If not set, the default one `config/system_profiling.cfg` will be used. Is used only with the system backend.
     /// - `PERFETTO_BUFFER_SIZE_KB`: size of the buffer in kilobytes. Default: 50 * 1024. Is used only with the in-process backend.
     /// - `PERFETTO_PLATFORM_NAME`: custom platform name. Default: architecture of the CPU that is currently in use.
-    pub fn new_from_env() -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
+    pub fn new_from_env(
+        metadata: &[(&'static str, String)],
+    ) -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
         let (timestamp_filename, timestamp_iso) = get_formatted_time();
         let git_info = get_git_info();
 
@@ -126,7 +128,7 @@ impl Layer {
         // Start tracing
         let guard = PerfettoGuard::new(backend, &output_path_str)?;
 
-        emit_run_metadata(output_path, timestamp_iso, git_info.as_ref());
+        emit_run_metadata(output_path, timestamp_iso, git_info.as_ref(), metadata);
 
         Ok((Self {}, guard))
     }
