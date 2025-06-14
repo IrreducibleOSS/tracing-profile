@@ -4,7 +4,7 @@ use chrono::{Local, TimeZone, Utc};
 use git2::{Repository, StatusOptions};
 
 /// Sample `Local::now()` once and return a pair:
-/// 1) `YYYY_MM_DD_HH_MM` for filenames  
+/// 1) `YYYY_MM_DD_HH_MM` for filenames
 /// 2) full RFC3339/ISO timestamp for metadata
 pub fn get_formatted_time() -> (String, String) {
     let now = Local::now();

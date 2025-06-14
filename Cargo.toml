@@ -34,4 +34,3 @@ panic = []
 perf_counters = ["perf-event"]
 perfetto = ["dep:perfetto-sys"]
 tracy = ["dep:tracing-tracy"]
-
