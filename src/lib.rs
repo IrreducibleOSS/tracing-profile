@@ -36,7 +36,7 @@
 //!     // Initialize the tracing with the default values
 //!     // Note that the guard must be kept alive for the duration of the program.
 //!     let _guard = init_tracing().unwrap();
-//!     
+//!
 //!     entry_point();
 //! }
 //! ```
