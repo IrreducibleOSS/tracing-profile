@@ -1,5 +1,7 @@
 .vscode
 .cargo
+.claude
 .idea/
 target/
 Cargo.lock
+CLAUDE.md

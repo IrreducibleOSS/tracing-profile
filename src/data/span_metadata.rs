@@ -1,16 +1,5 @@
 // Copyright 2024-2025 Irreducible Inc.
 
-use linear_map::LinearMap;
-use nix::sys::time::TimeSpec;
-
-#[derive(Debug)]
-pub struct CsvMetadata {
-    pub start_time: Option<u64>,
-    pub cpu_start_time: Option<TimeSpec>,
-    pub rayon_ns: u64,
-    pub fields: LinearMap<&'static str, String>,
-}
-
 #[cfg(feature = "perfetto")]
 pub struct PerfettoMetadata {
     event_data: Option<perfetto_sys::EventData>,

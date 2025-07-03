@@ -13,25 +13,10 @@ the function arguments being included as fields.
 
 ## Usage
 
-The library exposes two layers that output the information in different ways.
+The library exposes several layers that output the information in different ways.
 
 ## Feature flags
  - `perf_counters` enables `PrintPerfCountersLayer` layer. Currently performance counters work for Linux only.
-
-### CsvLayer
-
-The `CsvLayer` writes profiling information to a CSV file, which can be analyzed later by reconstructing the span graph.
-
-```
-$ cargo test
-$ cat /tmp/output.csv
-id,parent_id,elapsed_ns,span_name,file_name,call_depth,metadata
-2,1,22837,child span1,src/lib.rs,2,{"field1":"value1"}
-4,3,9255,child span3,src/lib.rs,3,{"field3":"value3"}
-5,3,7135,child span4,src/lib.rs,3,{"field4":"value4"}
-3,1,119802,child span2,src/lib.rs,2,{"field2":"value2"}
-1,0,287881,root span,src/lib.rs,1,{}
-```
 
 ### PrintTreeLayer
 
@@ -118,7 +103,6 @@ fn make_spans() {
 fn all_layers() {
     tracing_subscriber::registry()
         .with(PrintTreeLayer::default())
-        .with(CsvLayer::new("/tmp/output.csv"))
         .init();
     make_spans();
 }
@@ -138,7 +122,6 @@ fn all_layers() {
             hide_below_percent: 1.0,
             display_unaccounted: false
         }))
-        .with(CsvLayer::new("/tmp/output.csv"))
         .init();
     make_spans();
 }
