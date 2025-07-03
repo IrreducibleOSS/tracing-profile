@@ -12,7 +12,7 @@ impl std::fmt::Display for LogTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.label)?;
         for event in &self.events {
-            writeln!(f, "├>{}", event)?;
+            writeln!(f, "├>{event}")?;
         }
         self.display_children(f, Vec::new())
     }
@@ -35,18 +35,18 @@ impl LogTree {
             let labels = child.label.split('\n');
             for (index, label) in labels.enumerate() {
                 match (index == 0, is_last) {
-                    (true, true) => writeln!(f, "{}└── {}", prefix, label)?,
-                    (true, false) => writeln!(f, "{}├── {}", prefix, label)?,
-                    (false, true) => writeln!(f, "{}    {}", prefix, label)?,
-                    (false, false) => writeln!(f, "{}│   {}", prefix, label)?,
+                    (true, true) => writeln!(f, "{prefix}└── {label}")?,
+                    (true, false) => writeln!(f, "{prefix}├── {label}")?,
+                    (false, true) => writeln!(f, "{prefix}    {label}")?,
+                    (false, false) => writeln!(f, "{prefix}│   {label}")?,
                 }
             }
 
             for event in &child.events {
                 if is_last {
-                    writeln!(f, "{}   ├>{}", prefix, event)?;
+                    writeln!(f, "{prefix}   ├>{event}")?;
                 } else {
-                    writeln!(f, "{}│  ├>{}", prefix, event)?;
+                    writeln!(f, "{prefix}│  ├>{event}")?;
                 }
             }
 

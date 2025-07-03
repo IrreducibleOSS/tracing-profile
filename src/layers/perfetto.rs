@@ -63,7 +63,7 @@ impl Visit for SpanVisitor<'_> {
     }
 
     fn record_debug(&mut self, field: &Field, debug: &dyn std::fmt::Debug) {
-        self.0.add_string_arg(field.name(), &format!("{:?}", debug));
+        self.0.add_string_arg(field.name(), &format!("{debug:?}"));
     }
 }
 

@@ -344,7 +344,7 @@ impl GraphNode {
         }
 
         let tree = self.render_tree(self.execution_duration, config);
-        println!("{}", tree);
+        println!("{tree}");
     }
 
     fn label(&self, root_time: std::time::Duration, config: &Config) -> String {
@@ -400,7 +400,7 @@ impl GraphNode {
                     let mut indexed_child = child.clone();
                     indexed_child
                         .metadata
-                        .insert("index", format!("{}", name_count));
+                        .insert("index", format!("{name_count}"));
                     children.push(indexed_child);
                 } else {
                     aggregated_node = aggregated_node
