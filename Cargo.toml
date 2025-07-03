@@ -22,7 +22,6 @@ perfetto-sys = { package = "tracing-profile-perfetto-sys", version = "0.10.1", p
 thiserror = "2.0.3"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter", "std"] }
-tracing-tracy = { version = "0.11.3", optional = true }
 
 [dev-dependencies]
 rayon = "1.10.0"
@@ -33,4 +32,3 @@ ittapi = ["dep:ittapi"]
 panic = []
 perf_counters = ["perf-event"]
 perfetto = ["dep:perfetto-sys"]
-tracy = ["dep:tracing-tracy"]

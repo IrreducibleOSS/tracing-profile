@@ -42,7 +42,6 @@ pub enum Error {
 /// The following layers are added:
 /// - `PrintTreeLayer` (added always)
 /// - `IttApiLayer` (added if feature `ittapi` is enabled)
-/// - `TracyLayer` (added if feature `tracy` is enabled)
 /// - `PrintPerfCountersLayer` (added if feature `perf_counters` is enabled)
 ///
 /// Returns the guard that should be kept alive for the duration of the program.
@@ -69,17 +68,6 @@ pub fn init_tracing() -> Result<impl Drop, Error> {
         cfg_if! {
             if #[cfg(feature = "ittapi")] {
                 (layer.with(crate::IttApiLayer.with_env_filter()), guard)
-            } else {
-                (layer, guard)
-            }
-        }
-    };
-
-    // Add tracy layer if feature is enabled
-    let (layer, guard) = {
-        cfg_if! {
-            if #[cfg(feature = "tracy")] {
-                (layer.with(crate::TracyLayer::default().with_env_filter()), guard)
             } else {
                 (layer, guard)
             }
