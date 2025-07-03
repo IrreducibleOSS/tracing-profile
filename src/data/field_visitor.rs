@@ -35,7 +35,7 @@ impl tracing::field::Visit for StoringFieldVisitor<'_> {
     }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name(), format!("{:?}", value));
+        self.0.insert(field.name(), format!("{value:?}"));
     }
 }
 
@@ -126,8 +126,8 @@ impl Default for CounterValue {
 impl std::fmt::Display for CounterValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CounterValue::Int(val) => write!(f, "{}", val),
-            CounterValue::Float(val) => write!(f, "{}", val),
+            CounterValue::Int(val) => write!(f, "{val}"),
+            CounterValue::Float(val) => write!(f, "{val}"),
         }
     }
 }

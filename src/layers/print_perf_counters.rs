@@ -88,7 +88,7 @@ impl SpanData {
 
     fn print_table(&self, field_names: &[String], out: &mut impl Write) -> std::io::Result<()> {
         for (name, value) in field_names.iter().zip(self.aggregate.0.iter()) {
-            writeln!(out, "    {}: {}", name, value)?;
+            writeln!(out, "    {name}: {value}")?;
         }
 
         Ok(())
