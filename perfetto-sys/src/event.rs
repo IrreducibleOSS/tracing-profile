@@ -1,9 +1,13 @@
 // Copyright 2024-2025 Irreducible Inc.
 
-use std::{ffi::{c_char, CString}, ptr::null, thread::{self, ThreadId}};
-use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
- 
+use std::sync::{Mutex, OnceLock};
+use std::{
+    ffi::{c_char, CString},
+    ptr::null,
+    thread::{self, ThreadId},
+};
+
 // Get stable pointer for `key`
 fn get_key_ptr(key: &'static str) -> *const c_char {
     static KEY_POOL: OnceLock<Mutex<HashMap<&'static str, CString>>> = OnceLock::new();
@@ -14,7 +18,6 @@ fn get_key_ptr(key: &'static str) -> *const c_char {
         .or_insert_with(|| CString::new(key).expect("invalid key string"))
         .as_ptr()
 }
-
 
 #[repr(u8)]
 enum ArgType {
@@ -56,7 +59,14 @@ struct PerfettoArg {
 }
 
 extern "C" {
-    fn create_event(event_type: EventType, category: *const c_char, name: *const c_char, track_id: *const u64, args: *const PerfettoArg, arg_count: usize);
+    fn create_event(
+        event_type: EventType,
+        category: *const c_char,
+        name: *const c_char,
+        track_id: *const u64,
+        args: *const PerfettoArg,
+        arg_count: usize,
+    );
     fn destroy_event(category: *const c_char, track_id: *const u64);
 }
 
@@ -103,7 +113,12 @@ impl EventData {
     pub fn add_u64_field(&mut self, key: &'static str, value: u64) {
         let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue {  u64_key_value: KeyValue { key: key_ptr, value } },
+            data: ArgValue {
+                u64_key_value: KeyValue {
+                    key: key_ptr,
+                    value,
+                },
+            },
             arg_type: ArgType::U64KeyValue,
         });
     }
@@ -111,7 +126,12 @@ impl EventData {
     pub fn add_i64_field(&mut self, key: &'static str, value: i64) {
         let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { i64_key_value: KeyValue { key: key_ptr, value } },
+            data: ArgValue {
+                i64_key_value: KeyValue {
+                    key: key_ptr,
+                    value,
+                },
+            },
             arg_type: ArgType::I64KeyValue,
         });
     }
@@ -119,7 +139,12 @@ impl EventData {
     pub fn add_f64_field(&mut self, key: &'static str, value: f64) {
         let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { f64_key_value: KeyValue { key: key_ptr, value } },
+            data: ArgValue {
+                f64_key_value: KeyValue {
+                    key: key_ptr,
+                    value,
+                },
+            },
             arg_type: ArgType::F64KeyValue,
         });
     }
@@ -127,7 +152,12 @@ impl EventData {
     pub fn add_bool_field(&mut self, key: &'static str, value: bool) {
         let key_ptr = get_key_ptr(key);
         self.args.push(PerfettoArg {
-            data: ArgValue { bool_key_value: KeyValue { key: key_ptr, value } },
+            data: ArgValue {
+                bool_key_value: KeyValue {
+                    key: key_ptr,
+                    value,
+                },
+            },
             arg_type: ArgType::BoolKeyValue,
         });
     }
@@ -136,7 +166,12 @@ impl EventData {
         let key_ptr = get_key_ptr(key);
         let value = CString::new(value).expect("value is invalid string");
         self.args.push(PerfettoArg {
-            data: ArgValue { string_key_value: KeyValue { key: key_ptr, value: value.as_ptr() } },
+            data: ArgValue {
+                string_key_value: KeyValue {
+                    key: key_ptr,
+                    value: value.as_ptr(),
+                },
+            },
             arg_type: ArgType::StringKeyValue,
         });
         self.strings_storage.push(value);
@@ -163,14 +198,25 @@ pub struct TraceEvent {
 
 impl TraceEvent {
     pub fn new(event_data: EventData) -> Self {
-        unsafe { create_event(
-            EventType::Span,
-            event_data.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()), 
-            event_data.name.as_ptr(),
-            event_data.track_id.as_ref().map(|id| id as *const u64).unwrap_or(null()),
-            event_data.args.as_ptr(), 
-            event_data.args.len()) };
-        
+        unsafe {
+            create_event(
+                EventType::Span,
+                event_data
+                    .category
+                    .as_ref()
+                    .map(|s| s.as_ptr())
+                    .unwrap_or(null()),
+                event_data.name.as_ptr(),
+                event_data
+                    .track_id
+                    .as_ref()
+                    .map(|id| id as *const u64)
+                    .unwrap_or(null()),
+                event_data.args.as_ptr(),
+                event_data.args.len(),
+            )
+        };
+
         let track = match event_data.track_id {
             Some(track_id) => Track::Custom(track_id),
             None => Track::CurrentThread(thread::current().id()),
@@ -189,12 +235,15 @@ impl Drop for TraceEvent {
                 assert!(*thread_id == thread::current().id());
                 null()
             }
-            Track::Custom(track_id) => {
-                track_id as *const u64
-            },
+            Track::Custom(track_id) => track_id as *const u64,
         };
 
-        unsafe { destroy_event(self.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()), track_id) };
+        unsafe {
+            destroy_event(
+                self.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()),
+                track_id,
+            )
+        };
     }
 }
 
@@ -203,9 +252,17 @@ pub fn create_instant_event(event_data: EventData) {
     unsafe {
         create_event(
             EventType::Instant,
-            event_data.category.as_ref().map(|s| s.as_ptr()).unwrap_or(null()),
+            event_data
+                .category
+                .as_ref()
+                .map(|s| s.as_ptr())
+                .unwrap_or(null()),
             event_data.name.as_ptr(),
-            event_data.track_id.as_ref().map(|id| id as *const u64).unwrap_or(null()),
+            event_data
+                .track_id
+                .as_ref()
+                .map(|id| id as *const u64)
+                .unwrap_or(null()),
             event_data.args.as_ptr(),
             event_data.args.len(),
         );

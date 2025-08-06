@@ -1,7 +1,5 @@
 // Copyright 2024-2025 Irreducible Inc.
 
-use std::env;
-
 use cfg_if::cfg_if;
 use thiserror::Error;
 use tracing::{level_filters::LevelFilter, Subscriber};
@@ -13,7 +11,7 @@ use tracing_subscriber::{
     Layer,
 };
 
-use crate::{CsvLayer, PrintTreeConfig, PrintTreeLayer};
+use crate::{PrintTreeConfig, PrintTreeLayer};
 
 trait WithEnvFilter<S: Subscriber>: Layer<S> + Sized {
     fn with_env_filter(self) -> Filtered<Self, EnvFilter, S> {
@@ -46,7 +44,6 @@ pub enum Error {
 /// - `IttApiLayer` (added if feature `ittapi` is enabled)
 /// - `TracyLayer` (added if feature `tracy` is enabled)
 /// - `PrintPerfCountersLayer` (added if feature `perf_counters` is enabled)
-/// - `CsvLayer` (added if environment variable `PROFILE_CSV_FILE` is set)
 ///
 /// Returns the guard that should be kept alive for the duration of the program.
 pub fn init_tracing() -> Result<impl Drop, Error> {
@@ -106,12 +103,7 @@ pub fn init_tracing() -> Result<impl Drop, Error> {
         }
     };
 
-    if let Ok(csv_path) = env::var("PROFILE_CSV_FILE") {
-        let layer = layer.with(CsvLayer::new(csv_path));
-        layer.try_init()?;
-    } else {
-        layer.try_init()?;
-    }
+    layer.try_init()?;
 
     Ok(guard)
 }
