@@ -1,7 +1,7 @@
 // Copyright 2024-2025 Irreducible Inc.
 
 use ittapi::{Domain, Task};
-use std::{fmt::Write, sync::Once};
+use std::fmt::Write;
 use tracing::span;
 use tracing_subscriber::{layer, registry::LookupSpan};
 
@@ -51,7 +51,7 @@ use crate::errors::err_msg;
 /// use tracing_subscriber::prelude::*;
 ///
 /// tracing_subscriber::registry()
-///     .with(IttApiLayer::default())
+///     .with(IttApiLayer::new())
 ///     .init();
 ///
 /// // Your spans will now be visible in Intel VTune Profiler
@@ -71,8 +71,30 @@ use crate::errors::err_msg;
 /// - [Intel ITT API Documentation](https://www.intel.com/content/www/us/en/docs/vtune-profiler/user-guide/2023-1/instrumentation-and-tracing-technology-apis.html)
 /// - [Intel VTune Profiler](https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html)
 /// - [ittapi crate](https://github.com/intel/ittapi)
-#[derive(Default)]
-pub struct Layer;
+pub struct Layer {
+    domain: &'static Domain,
+}
+
+impl Layer {
+    /// Creates a new IttApiLayer with a leaked Domain.
+    ///
+    /// This uses `Box::leak()` to create a `'static` reference to the Domain.
+    /// This is acceptable because:
+    /// - The Domain type has no Drop implementation and leaks its internal resources anyway
+    /// - We typically only create one Layer instance for the lifetime of the application
+    /// - This avoids the complexity and unsafety of using static mut with non-Send types
+    pub fn new() -> Self {
+        // Create a boxed Domain and leak it to get a 'static reference
+        let domain = Box::leak(Box::new(Domain::new("Global tracing domain")));
+        Self { domain }
+    }
+}
+
+impl Default for Layer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Layer
 where
@@ -102,7 +124,7 @@ where
 
     fn on_enter(&self, id: &span::Id, ctx: layer::Context<'_, S>) {
         with_span_storage_mut::<TaskData, S>(id, ctx, |task_data| {
-            task_data.task = Some(Task::begin(global_domain(), task_data.name.as_str()));
+            task_data.task = Some(Task::begin(self.domain, task_data.name.as_str()));
         });
     }
 
@@ -122,25 +144,4 @@ where
 struct TaskData {
     name: String,
     task: Option<Task<'static>>,
-}
-
-/// Returns static domain for ittapi tracing
-#[allow(static_mut_refs)]
-fn global_domain() -> &'static Domain {
-    // Unfortunately we can't use `OnceLock` here because `Domain` doesn't implement `Send`.
-    // `OnceLock` requires generic type to implement `Send` in order to be `Sync` for the case when
-    // it's initialized in one thread and dropped in another, which is not the case for static variables.
-    static mut DOMAIN: Option<Domain> = None;
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        // Safety: `DOMAIN` is not initialized yet, only one thread can reach this point.
-        unsafe {
-            DOMAIN = Some(Domain::new("Global tracing domain"));
-        }
-    });
-
-    // Safety:
-    // - `DOMAIN` is initialized at this point since `Once::call_once` guarantees that all observable effects are visible at this point.
-    // - `DOMAIN` is never set to `None` after initialization, so returning reference with static lifetime is safe.
-    unsafe { DOMAIN.as_ref().expect("must be initialized") }
 }
