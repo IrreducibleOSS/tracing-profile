@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::utils::{sanitize_filename, GitInfo};
+use crate::filename_utils::{sanitize_filename, GitInfo};
 use gethostname::gethostname;
 use perfetto_sys::{create_instant_event, EventData};
 
