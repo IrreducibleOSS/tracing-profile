@@ -68,7 +68,7 @@ pub fn init_tracing() -> Result<impl Drop, Error> {
     let (layer, guard) = {
         cfg_if! {
             if #[cfg(feature = "ittapi")] {
-                (layer.with(crate::IttApiLayer.with_env_filter()), guard)
+                (layer.with(crate::IttApiLayer::new().with_env_filter()), guard)
             } else {
                 (layer, guard)
             }
