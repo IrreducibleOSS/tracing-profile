@@ -13,9 +13,11 @@ pub use field_visitor::{CounterValue, CounterVisitor, StoringFieldVisitor, Writi
 #[allow(unused_imports)]
 pub(super) use guard_wrapper::GuardWrapper;
 pub use log_tree::LogTree;
+#[cfg(feature = "perfetto")]
 pub use span_metadata::*;
 #[cfg(feature = "ittapi")]
 pub use storage_utils::insert_to_span_storage;
 #[cfg(feature = "perf_counters")]
 pub use storage_utils::with_span_storage;
+#[cfg(any(feature = "perfetto", feature = "ittapi", feature = "perf_counters"))]
 pub use storage_utils::with_span_storage_mut;

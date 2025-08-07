@@ -8,7 +8,6 @@
 //! information necessary to construct a call graph from the resulting logs.
 //!
 //! Multiple `Layer` implementations are provided:
-//!     `CsvLayer`: logs data in CSV format
 //!     `PrintTreeLayer`: prints a call graph
 //!     `PrintPerfCountersLayer`: prints aggregated performance counters for each span.
 //!     `PerfettoLayer`: uses a local or system-wide perfetto tracing service to record data.
@@ -53,14 +52,11 @@ mod errors;
 mod layers;
 pub mod utils;
 
+pub use layers::graph::{Config as PrintTreeConfig, Layer as PrintTreeLayer};
 #[cfg(feature = "ittapi")]
 pub use layers::ittapi::Layer as IttApiLayer;
 #[cfg(feature = "perf_counters")]
 pub use layers::print_perf_counters::Layer as PrintPerfCountersLayer;
-pub use layers::{
-    csv::Layer as CsvLayer,
-    graph::{Config as PrintTreeConfig, Layer as PrintTreeLayer},
-};
 #[cfg(feature = "perf_counters")]
 pub use {
     perf_event::events::Cache as PerfCacheEvent, perf_event::events::Event as PerfEvent,

@@ -24,6 +24,7 @@ pub fn insert_to_span_storage<T, S>(
 }
 
 /// Perform operation with mutable span storage value.
+#[allow(unused)]
 pub fn with_span_storage_mut<T, S>(
     id: &span::Id,
     ctx: tracing_subscriber::layer::Context<'_, S>,
