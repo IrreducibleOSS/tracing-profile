@@ -9,8 +9,8 @@ use tracing::{
 use crate::data::{with_span_storage_mut, CounterValue, CounterVisitor, PerfettoMetadata};
 use crate::errors::err_msg;
 
+use crate::filename_utils::{get_formatted_time, get_git_info};
 use crate::layers::perfetto_utils::{compute_trace_path, emit_run_metadata};
-use crate::utils::{get_formatted_time, get_git_info};
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {

@@ -49,6 +49,8 @@
 mod data;
 mod env_utils;
 mod errors;
+#[cfg(feature = "gen_filename")]
+mod filename_utils;
 mod layers;
 pub mod utils;
 
