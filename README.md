@@ -13,7 +13,7 @@ the function arguments being included as fields.
 
 ## Usage
 
-The library exposes two layers that output the information in different ways.
+The library exposes several layers that output the information in different ways.
 
 ## Feature flags
  - `perf_counters` enables `PrintPerfCountersLayer` layer. Currently performance counters work for Linux only.
