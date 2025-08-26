@@ -29,10 +29,13 @@ pub struct GitInfo {
     /// Short (7-char) commit hash.
     pub commit_short: String,
     /// Full commit message (first line), if available.
+    #[cfg_attr(not(feature = "perfetto"), allow(dead_code))]
     pub commit_message: Option<String>,
     /// Commit author name, if available.
+    #[cfg_attr(not(feature = "perfetto"), allow(dead_code))]
     pub commit_author: Option<String>,
     /// Commit timestamp (ISO-8601), if available.
+    #[cfg_attr(not(feature = "perfetto"), allow(dead_code))]
     pub commit_time: Option<String>,
     /// Whether the working tree is clean (no uncommitted changes).
     pub is_clean: bool,

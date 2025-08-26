@@ -2,43 +2,35 @@
 
 use std::path::PathBuf;
 
-use crate::filename_utils::{sanitize_filename, GitInfo};
+use crate::filename_builder::TraceFilenameBuilder;
+use crate::filename_utils::GitInfo;
 use gethostname::gethostname;
 use perfetto_sys::{create_instant_event, EventData};
 
-/// Compute where the .perfetto-trace file should live:
+/// Compute where the .perfetto-trace file should live using TraceFilenameBuilder.
 ///
-/// 1. If $PERFETTO_TRACE_FILE_PATH is set, return that PathBuf.
-/// 2. Otherwise, build `<timestamp>-<branch>-<commit>[-dirty]-<platform>-<hostname>.perfetto-trace`
-///    and (if $PERFETTO_TRACE_DIR is set) prepend that directory.
+/// Uses TraceFilenameBuilder for configuration. It maintains full backward compatibility
+/// with all existing environment variables.
 ///
-pub(crate) fn compute_trace_path(
-    timestamp_filename: String,
-    git_info: Option<&GitInfo>,
-) -> PathBuf {
-    if let Ok(p) = std::env::var("PERFETTO_TRACE_FILE_PATH") {
-        return PathBuf::from(p);
-    }
+/// Environment variable handling:
+/// - `PERFETTO_TRACE_FILE_PATH`: complete override
+/// - All builder-specific environment variables are handled by the builder itself
+///
+/// **Important**: This function creates the `.last_perfetto_trace_path` file for
+/// compatibility with existing tooling.
+pub(crate) fn compute_trace_path_with_builder(
+    builder: TraceFilenameBuilder,
+) -> Result<PathBuf, crate::filename_builder::FilenameBuilderError> {
+    // Build the path using the builder
+    let output_path = builder.build()?;
 
-    let mut parts = Vec::with_capacity(6);
-    parts.push(timestamp_filename);
-    if let Some(g) = &git_info {
-        parts.push(sanitize_filename(&g.branch));
-        parts.push(g.commit_short.clone());
-        if !g.is_clean {
-            parts.push("dirty".to_string());
-        }
-    }
-    let platform = std::env::var("PERFETTO_PLATFORM_NAME")
-        .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
-    parts.push(platform);
-    let hostname = gethostname().to_string_lossy().to_string();
-    parts.push(hostname);
+    // Create .last_perfetto_trace_path file for compatibility with existing tooling
+    // This matches the behavior in perfetto.rs new_from_env() - fails if write fails
+    let output_path_str = output_path.to_string_lossy().to_string();
+    std::fs::write(".last_perfetto_trace_path", &output_path_str)
+        .map_err(|e| crate::filename_builder::FilenameBuilderError::IoError(e.to_string()))?;
 
-    let fname = format!("{}.perfetto-trace", parts.join("-"));
-
-    let dir = std::env::var("PERFETTO_TRACE_DIR").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(dir).join(fname)
+    Ok(output_path)
 }
 
 pub(crate) fn emit_run_metadata(

@@ -10,7 +10,7 @@ use crate::data::{with_span_storage_mut, CounterValue, CounterVisitor, PerfettoM
 use crate::errors::err_msg;
 
 use crate::filename_utils::{get_formatted_time, get_git_info};
-use crate::layers::perfetto_utils::{compute_trace_path, emit_run_metadata};
+use crate::layers::perfetto_utils::emit_run_metadata;
 
 /// Default categoties for events and counters.
 pub struct PerfettoSettings {
@@ -98,15 +98,56 @@ impl Layer {
     /// - `PERFETTO_BUFFER_SIZE_KB`: size of the buffer in kilobytes. Default: 50 * 1024. Is used only with the in-process backend.
     /// - `PERFETTO_PLATFORM_NAME`: custom platform name. Default: architecture of the CPU that is currently in use.
     pub fn new_from_env() -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
-        let (timestamp_filename, timestamp_iso) = get_formatted_time();
-        let git_info = get_git_info();
+        // Simply delegate to the builder version
+        let builder = crate::filename_builder::TraceFilenameBuilder::from_env();
+        Self::new_from_env_with_builder(builder)
+    }
 
-        let output_path = compute_trace_path(timestamp_filename, git_info.as_ref());
+    /// Create a new layer using a custom TraceFilenameBuilder.
+    ///
+    /// This method provides the same functionality as `new_from_env()` but uses
+    /// a TraceFilenameBuilder to customize the trace filename. All other environment
+    /// variables are still respected (PERFETTO_FUSE, PERFETTO_BIN_PATH, etc.).
+    ///
+    /// The builder handles all filename-related environment variables internally
+    /// and maintains backward compatibility.
+    ///
+    /// # Arguments
+    /// * `builder` - TraceFilenameBuilder for customizing the trace filename
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use tracing_profile::{PerfettoLayer, TraceFilenameBuilder};
+    ///
+    /// let builder = TraceFilenameBuilder::new()
+    ///     .name("my_app")
+    ///     .iteration(1)
+    ///     .timestamp()
+    ///     .git_info()
+    ///     .platform()
+    ///     .hostname();
+    ///
+    /// let (layer, guard) = PerfettoLayer::new_from_env_with_builder(builder).unwrap();
+    /// ```
+    pub fn new_from_env_with_builder(
+        builder: crate::filename_builder::TraceFilenameBuilder,
+    ) -> Result<(Self, PerfettoGuard), perfetto_sys::Error> {
+        use crate::layers::perfetto_utils::compute_trace_path_with_builder;
+
+        // Use the new builder-based path computation
+        let output_path = compute_trace_path_with_builder(builder).map_err(|e| {
+            perfetto_sys::Error::IOError(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Failed to build trace path: {e}"),
+            ))
+        })?;
         let output_path_str = output_path.to_string_lossy().to_string();
 
-        // Record the chosen path for external scripts
-        std::fs::write(".last_perfetto_trace_path", &output_path_str)?;
+        // Get timestamp and git info for metadata emission
+        let (_timestamp_filename, timestamp_iso) = get_formatted_time();
+        let git_info = get_git_info();
 
+        // Configure backend (same logic as new_from_env)
         let backend = match std::env::var("PERFETTO_FUSE") {
             Ok(_) => BackendConfig::System {
                 perfetto_bin_path: std::env::var("PERFETTO_BIN_PATH").ok(),
