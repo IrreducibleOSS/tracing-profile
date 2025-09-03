@@ -16,7 +16,9 @@ the function arguments being included as fields.
 The library exposes two layers that output the information in different ways.
 
 ## Feature flags
+ - `gen_filename` enables `TraceFilenameBuilder` for customizable trace filenames (automatically enabled with `perfetto`)
  - `perf_counters` enables `PrintPerfCountersLayer` layer. Currently performance counters work for Linux only.
+ - `perfetto` enables Perfetto trace generation with customizable filenames
 
 ### PrintTreeLayer
 

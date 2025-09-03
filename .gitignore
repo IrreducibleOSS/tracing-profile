@@ -3,3 +3,8 @@
 .idea/
 target/
 Cargo.lock
+
+# Trace files (from tests and development)
+*.perfetto-trace
+.last_perfetto_trace_path
+test_traces/
