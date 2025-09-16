@@ -3,13 +3,13 @@
 //https://android.googlesource.com/platform/external/perfetto/+/refs/tags/android-14.0.0_r50/examples/sdk/
 //https://perfetto.dev/docs/instrumentation/tracing-sdk
 fn main() {
-    // Building cpp will fail on targets other than macOS and Linux so we perform this check
+    // Building cpp will fail on targets other than macOS, Linux and Android so we perform this check
     // to produce a meaningful error message.
     if !matches!(
         std::env::var("CARGO_CFG_TARGET_OS").as_deref(),
-        Ok("linux") | Ok("macos")
+        Ok("linux") | Ok("macos") | Ok("android")
     ) {
-        panic!("Perfetto tracing is only supported on Linux and macOS");
+        panic!("Perfetto tracing works only on Linux, macOS, and Android");
     }
 
     println!("cargo::rerun-if-changed=build.rs");
