@@ -66,11 +66,12 @@ pub(crate) fn emit_run_metadata(
         event_data.add_bool_field("git_clean", g.is_clean);
     }
 
-    // Other zero-dependency metadata
+    // Other zero-dependency metadata (captured at compile time)
     event_data.add_string_arg("crate_version", env!("CARGO_PKG_VERSION"));
-    event_data.add_string_arg("os", std::env::consts::OS);
-    event_data.add_string_arg("os_family", std::env::consts::FAMILY);
-    event_data.add_string_arg("arch", std::env::consts::ARCH);
+    event_data.add_string_arg("os", env!("BUILD_TARGET_OS"));
+    event_data.add_string_arg("os_family", env!("BUILD_TARGET_FAMILY"));
+    event_data.add_string_arg("arch", env!("BUILD_TARGET_ARCH"));
+    event_data.add_string_arg("target_triple", env!("BUILD_TARGET_TRIPLE"));
     if let Ok(host) = gethostname().into_string() {
         event_data.add_string_arg("hostname", &host);
     }

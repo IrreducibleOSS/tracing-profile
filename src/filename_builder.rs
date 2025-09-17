@@ -116,9 +116,12 @@ impl TraceFilenameBuilder {
     }
 
     /// Auto-detect and add platform information.
+    ///
+    /// Uses the compile-time target architecture (what the binary was compiled for),
+    /// not the runtime architecture.
     pub fn platform(mut self) -> Self {
         let platform = std::env::var("PERFETTO_PLATFORM_NAME")
-            .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
+            .unwrap_or_else(|_| env!("BUILD_TARGET_ARCH").to_string());
         self.platform = Some(platform);
         self
     }

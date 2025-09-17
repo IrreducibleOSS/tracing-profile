@@ -1,7 +1,6 @@
 // Copyright 2024-2025 Irreducible Inc.
 
-use chrono::{Local, TimeZone, Utc};
-use git2::{Repository, StatusOptions};
+use chrono::Local;
 
 /// Sample `Local::now()` once and return a pair:
 /// 1) `YYYYMMDDTHHmmss` for filenames (ISO 8601 basic format)
@@ -41,40 +40,46 @@ pub struct GitInfo {
     pub is_clean: bool,
 }
 
-/// Discovers the repository and returns a `GitInfo` snapshot, or `None` on any error.
+/// Returns git information captured at compile time.
+///
+/// This uses git information that was captured during the build process,
+/// making it work even in environments where git is not available at runtime
+/// (e.g., Android after deployment).
+///
+/// The values are baked into the binary as string literals during compilation,
+/// so no git repository or environment variables are needed at runtime.
 pub fn get_git_info() -> Option<GitInfo> {
-    let repo = Repository::discover(".").ok()?;
-    let head = repo.head().ok()?;
-    let branch = head.shorthand()?.to_string();
-    let commit = head.peel_to_commit().ok()?;
-    let commit_short = commit.id().to_string()[..7].to_string();
-    let commit_message = commit.message().map(|m| m.trim().to_string());
-    let commit_author = commit.author().name().map(|s| s.to_string());
+    // These env!() macros are resolved at compile time and become string literals
+    let branch = env!("BUILD_GIT_BRANCH");
+    let commit_short = env!("BUILD_GIT_COMMIT_SHORT");
+    let is_dirty = env!("BUILD_GIT_DIRTY");
+    let commit_message = env!("BUILD_GIT_COMMIT_MESSAGE");
+    let commit_author = env!("BUILD_GIT_COMMIT_AUTHOR");
+    let commit_time = env!("BUILD_GIT_COMMIT_TIME");
 
-    // Format the commit timestamp as ISO-8601
-    let commit_time = {
-        let t = commit.time();
-        Utc.timestamp_opt(t.seconds(), 0)
-            .single()
-            .map(|dt_utc| dt_utc.with_timezone(&Local).to_rfc3339())
-    };
-
-    // Is clean
-    let mut opts = StatusOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .include_ignored(false);
-    let is_clean = repo
-        .statuses(Some(&mut opts))
-        .map(|statuses| statuses.is_empty())
-        .unwrap_or(false);
+    // Return None if git info wasn't available at build time
+    if branch == "unknown" || commit_short == "unknown" {
+        return None;
+    }
 
     Some(GitInfo {
-        branch,
-        commit_short,
-        commit_message,
-        commit_author,
-        commit_time,
-        is_clean,
+        branch: branch.to_string(),
+        commit_short: commit_short.to_string(),
+        commit_message: if commit_message.is_empty() {
+            None
+        } else {
+            Some(commit_message.to_string())
+        },
+        commit_author: if commit_author.is_empty() {
+            None
+        } else {
+            Some(commit_author.to_string())
+        },
+        commit_time: if commit_time.is_empty() {
+            None
+        } else {
+            Some(commit_time.to_string())
+        },
+        is_clean: is_dirty != "true",
     })
 }
