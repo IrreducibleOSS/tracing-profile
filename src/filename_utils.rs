@@ -4,11 +4,11 @@ use chrono::{Local, TimeZone, Utc};
 use git2::{Repository, StatusOptions};
 
 /// Sample `Local::now()` once and return a pair:
-/// 1) `YYYY_MM_DD_HH_MM` for filenames
+/// 1) `YYYYMMDDTHHmmss` for filenames (ISO 8601 basic format)
 /// 2) full RFC3339/ISO timestamp for metadata
 pub fn get_formatted_time() -> (String, String) {
     let now = Local::now();
-    (now.format("%Y_%m_%d_%H_%M").to_string(), now.to_rfc3339())
+    (now.format("%Y%m%dT%H%M%S").to_string(), now.to_rfc3339())
 }
 
 pub fn sanitize_filename(branch: &str) -> String {

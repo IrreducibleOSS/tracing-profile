@@ -60,12 +60,12 @@ impl TraceFilenameBuilder {
     /// Create a new builder with default settings.
     pub fn new() -> Self {
         Self {
-            separator: "-".to_string(),
+            separator: ".".to_string(),
             ..Default::default()
         }
     }
 
-    /// Add current timestamp in default format (YYYY_MM_DD_HH_MM).
+    /// Add current timestamp in default format (YYYYMMDDTHHmmss).
     pub fn timestamp(mut self) -> Self {
         let (timestamp_filename, _) = get_formatted_time();
         self.timestamp = Some(timestamp_filename);
@@ -178,14 +178,14 @@ impl TraceFilenameBuilder {
     /// to provide consistent default behavior, ensuring complete
     /// backward compatibility.
     ///
-    /// **Default format**: `<timestamp>-<branch>-<commit>[-dirty]-<platform>-<hostname>.perfetto-trace`
+    /// **Default format**: `<timestamp>.<branch>.<commit>[.dirty].<platform>.<hostname>.perfetto-trace`
     ///
     /// This method applies the following configuration:
-    /// - Adds current timestamp in `YYYY_MM_DD_HH_MM` format
+    /// - Adds current timestamp in `YYYYMMDDTHHmmss` format
     /// - Adds git branch, commit hash, and dirty flag (if in git repository)
     /// - Adds platform information (CPU architecture)  
     /// - Adds hostname
-    /// - Uses "-" as separator
+    /// - Uses "." as separator
     /// - Sets extension to ".perfetto-trace"
     ///
     /// All environment variable overrides are still respected when `build()` is called.
@@ -196,7 +196,7 @@ impl TraceFilenameBuilder {
     ///
     /// let builder = TraceFilenameBuilder::from_env();
     /// let path = builder.build().unwrap();
-    /// // Produces: "2025_08_28_10_30-main-abc123-dirty-x86_64-hostname.perfetto-trace"
+    /// // Produces: "20250828T103000.main.abc123.dirty.x86_64.hostname.perfetto-trace"
     /// ```
     pub fn from_env() -> Self {
         Self::new().timestamp().git_info().platform().hostname()
@@ -219,8 +219,8 @@ impl TraceFilenameBuilder {
 
     /// Add a subdirectory with an auto-generated run ID.
     ///
-    /// Generates a run ID like "20250115-103045-abc1234" combining:
-    /// - Current datetime in YYYYMMDD-HHMMSS format
+    /// Generates a run ID like "20250115T103045-abc1234" combining:
+    /// - Current datetime in YYYYMMDDTHHmmss format
     /// - Short git commit hash (or "nogit" if not in a git repo)
     ///
     /// This is useful for organizing traces from different benchmark sessions.
@@ -228,7 +228,7 @@ impl TraceFilenameBuilder {
     pub fn subdir_run_id(self) -> Self {
         use crate::filename_utils::get_git_info;
 
-        let datetime = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let datetime = chrono::Local::now().format("%Y%m%dT%H%M%S").to_string();
 
         let git_hash = get_git_info()
             .map(|info| info.commit_short)
@@ -266,7 +266,7 @@ impl TraceFilenameBuilder {
         self
     }
 
-    /// Set custom separator (default is "-").
+    /// Set custom separator (default is ".").
     pub fn separator(mut self, separator: impl Into<String>) -> Self {
         self.separator = separator.into();
         self
@@ -525,13 +525,13 @@ mod tests {
 
         let filename = path.file_name().unwrap().to_string_lossy();
 
-        // Should have basic structure: timestamp-...-platform-hostname.perfetto-trace
+        // Should have basic structure: timestamp.platform.hostname.perfetto-trace
         assert!(filename.ends_with(".perfetto-trace"));
 
         // Should have separator-delimited components
         let parts: Vec<&str> = filename
             .trim_end_matches(".perfetto-trace")
-            .split('-')
+            .split('.')
             .collect();
         assert!(parts.len() >= 2); // At least timestamp and platform/hostname
     }
