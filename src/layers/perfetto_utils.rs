@@ -16,8 +16,6 @@ use perfetto_sys::{create_instant_event, EventData};
 /// - `PERFETTO_TRACE_FILE_PATH`: complete override
 /// - All builder-specific environment variables are handled by the builder itself
 ///
-/// **Important**: This function creates the `.last_perfetto_trace_path` file for
-/// compatibility with existing tooling.
 pub(crate) fn compute_trace_path_with_builder(
     builder: TraceFilenameBuilder,
 ) -> Result<PathBuf, crate::filename_builder::FilenameBuilderError> {
@@ -25,10 +23,13 @@ pub(crate) fn compute_trace_path_with_builder(
     let output_path = builder.build()?;
 
     // Create .last_perfetto_trace_path file for compatibility with existing tooling
-    // This matches the behavior in perfetto.rs new_from_env() - fails if write fails
-    let output_path_str = output_path.to_string_lossy().to_string();
-    std::fs::write(".last_perfetto_trace_path", &output_path_str)
-        .map_err(|e| crate::filename_builder::FilenameBuilderError::IoError(e.to_string()))?;
+    // Skip on Android due to restricted file system permissions
+    #[cfg(not(target_os = "android"))]
+    {
+        let output_path_str = output_path.to_string_lossy().to_string();
+        std::fs::write(".last_perfetto_trace_path", &output_path_str)
+            .map_err(|e| crate::filename_builder::FilenameBuilderError::IoError(e.to_string()))?;
+    }
 
     Ok(output_path)
 }
