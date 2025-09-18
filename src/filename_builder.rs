@@ -347,6 +347,16 @@ impl TraceFilenameBuilder {
             parts.push(name.clone());
         }
 
+        // Add thread mode if specified
+        if let Some(thread_mode) = &self.thread_mode {
+            parts.push(thread_mode.clone());
+        }
+
+        // Add thread count if specified
+        if let Some(thread_count) = &self.thread_count {
+            parts.push(format!("threads{}", thread_count));
+        }
+
         // Add custom fields (threading mode, fusion, etc.)
         for (_, value) in &self.custom_fields {
             if !value.is_empty() {
